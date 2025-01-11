@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.4;
 
+import {SheepyBase} from "./SheepyBase.sol";
 import {DN404} from "dn404/src/DN404.sol";
 import {Ownable} from "solady/auth/Ownable.sol";
 import {EnumerableRoles} from "solady/auth/EnumerableRoles.sol";
@@ -8,20 +9,7 @@ import {LibString} from "solady/utils/LibString.sol";
 import {SafeTransferLib} from "solady/utils/SafeTransferLib.sol";
 
 /// @dev This contract can be used by itself or as an proxy's implementation.
-contract Sheepy404 is DN404, Ownable, EnumerableRoles {
-    /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
-    /*                         CONSTANTS                          */
-    /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
-
-    /// @dev The admin role.
-    uint256 public constant ADMIN_ROLE = 0;
-
-    /// @dev The role that can withdraw native currency.
-    uint256 public constant WITHDRAWER_ROLE = 1;
-
-    /// @dev The maximum role that can be set.
-    uint256 public constant MAX_ROLE = 1;
-
+contract Sheepy404 is DN404, SheepyBase {
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
     /*                           EVENTS                           */
     /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
@@ -53,15 +41,13 @@ contract Sheepy404 is DN404, Ownable, EnumerableRoles {
     /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
 
     /// @dev For initialization.
-    function initialize(
-        address initialOwner,
-        uint256 initialSupply,
-        address mirror,
-        address initialAdmin
-    ) public virtual {
-        _initializeOwner(initialOwner);
+    function initialize(address initialOwner, address initialAdmin, address mirror)
+        public
+        virtual
+    {
+        uint256 initialSupply = 1_000_000_000 * 10 ** 18;
+        _initializeSheepyBase(initialOwner, initialAdmin);
         _initializeDN404(initialSupply, initialOwner, mirror);
-        if (initialAdmin != address(0)) _setRole(initialAdmin, ADMIN_ROLE, true);
     }
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
@@ -125,27 +111,13 @@ contract Sheepy404 is DN404, Ownable, EnumerableRoles {
         revealPrice = newRevealPrice;
     }
 
-    /// @dev Withdraws all the native currency in the contract to `to`.
-    function withdrawAllNative(address to) public onlyOwnerOrRole(WITHDRAWER_ROLE) {
-        SafeTransferLib.safeTransferAllETH(_coalesce(to));
-    }
-
-    /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
-    /*                      INTERNAL HELPERS                      */
-    /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
-
-    /// @dev Coalesces `to` to `msg.sender` if it is `address(0)`.
-    function _coalesce(address to) internal view returns (address) {
-        return to == address(0) ? msg.sender : to;
-    }
-
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
     /*                         OVERRIDES                          */
     /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
 
-    /// @dev So that `_initializeOwner` cannot be called twice.
-    function _guardInitializeOwner() internal pure virtual override returns (bool) {
-        return true;
+    /// @dev 100k full ERC20 tokens for 1 ERC721 NFT.
+    function _unit() internal view virtual override returns (uint256) {
+        return 100_000 * 10 ** 18;
     }
 
     /// @dev Hook that is called after a batch of NFT transfers.

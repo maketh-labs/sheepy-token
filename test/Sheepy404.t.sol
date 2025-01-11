@@ -8,8 +8,8 @@ import "../src/Sheepy404Mirror.sol";
 import "solady/utils/LibClone.sol";
 
 contract Sheepy404Test is SoladyTest {
-    Sheepy404 sheepy404;
-    Sheepy404Mirror sheepy404Mirror;
+    Sheepy404 sheepy;
+    Sheepy404Mirror mirror;
 
     address internal _ALICE = address(0x111);
     address internal _BOB = address(0x222);
@@ -17,22 +17,44 @@ contract Sheepy404Test is SoladyTest {
     address internal _DAVID = address(0x444);
 
     uint256 internal _WAD = 10 ** 18;
+    uint256 internal _INITIAL_SUPPLY = 1_000_000_000 * _WAD;
+    uint256 internal _UNIT = _INITIAL_SUPPLY / 10_000;
+
+    string internal constant _NAME = "Sheepy";
+    string internal constant _SYMBOL = "Sheepy404";
+    string internal constant _BASE_URI = "https://sheepyapi.com/{id}.json";
 
     function setUp() public {
-        sheepy404 = new Sheepy404();
-        sheepy404Mirror = new Sheepy404Mirror();
+        sheepy = new Sheepy404();
+        mirror = new Sheepy404Mirror();
     }
 
     function testInitialize() public {
-        address mirror = address(sheepy404Mirror);
-        // string memory name = "Sheepy";
-        // string memory symbol = "Sheepy404";
-        // string memory baseURI = "https://sheepyapi.com/{id}.json";
-        uint256 initialSupply = 1000 * _WAD;
+        sheepy.initialize(_ALICE, _BOB, address(mirror));
+        assertEq(sheepy.balanceOf(_ALICE), _INITIAL_SUPPLY);
+        mirror.pullOwner();
+        assertEq(mirror.owner(), _ALICE);
 
-        sheepy404.initialize(_ALICE, initialSupply, mirror, _BOB);
-        assertEq(sheepy404.balanceOf(_ALICE), initialSupply);
-        sheepy404Mirror.pullOwner();
-        assertEq(sheepy404Mirror.owner(), _ALICE);
+        vm.prank(_ALICE);
+        sheepy.setBaseURI(_BASE_URI);
+        vm.prank(_ALICE);
+        sheepy.setNameAndSymbol(_NAME, _SYMBOL);
+
+        assertEq(sheepy.name(), _NAME);
+        assertEq(sheepy.symbol(), _SYMBOL);
+
+        assertEq(mirror.name(), _NAME);
+        assertEq(mirror.symbol(), _SYMBOL);
+
+        assertEq(mirror.balanceOf(_BOB), 0);
+        vm.prank(_ALICE);
+        sheepy.transfer(_BOB, _UNIT - 1);
+        assertEq(mirror.balanceOf(_BOB), 0);
+        vm.prank(_ALICE);
+        sheepy.transfer(_BOB, 1);
+        assertEq(mirror.balanceOf(_BOB), 1);
+        assertEq(mirror.ownerOf(1), _BOB);
+
+        assertEq(mirror.tokenURI(1), "https://sheepyapi.com/1.json");
     }
 }
