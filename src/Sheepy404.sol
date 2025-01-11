@@ -3,10 +3,7 @@ pragma solidity ^0.8.4;
 
 import {SheepyBase} from "./SheepyBase.sol";
 import {DN404} from "dn404/src/DN404.sol";
-import {Ownable} from "solady/auth/Ownable.sol";
-import {EnumerableRoles} from "solady/auth/EnumerableRoles.sol";
 import {LibString} from "solady/utils/LibString.sol";
-import {SafeTransferLib} from "solady/utils/SafeTransferLib.sol";
 
 /// @dev This contract can be used by itself or as an proxy's implementation.
 contract Sheepy404 is DN404, SheepyBase {
