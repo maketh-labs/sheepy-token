@@ -10,9 +10,9 @@ contract DeployAllScript is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(deployerPrivateKey);
-        Sheepy404 sheepy = new Sheepy404();
-        Sheepy404Mirror mirror = new Sheepy404Mirror();
-        SheepySale sale = new SheepySale();
+        new Sheepy404();
+        new Sheepy404Mirror();
+        new SheepySale();
         vm.stopBroadcast();
     }
 }
