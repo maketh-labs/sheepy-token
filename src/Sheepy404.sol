@@ -4,9 +4,14 @@ pragma solidity ^0.8.4;
 import {SheepyBase} from "./SheepyBase.sol";
 import {DN404} from "dn404/src/DN404.sol";
 import {LibString} from "solady/utils/LibString.sol";
+import {LibBitmap} from "solady/utils/LibBitmap.sol";
+import {DynamicArrayLib} from "solady/utils/DynamicArrayLib.sol";
 
 /// @dev This contract can be used by itself or as an proxy's implementation.
 contract Sheepy404 is DN404, SheepyBase {
+    using LibBitmap for *;
+    using DynamicArrayLib for *;
+
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
     /*                           EVENTS                           */
     /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
@@ -29,6 +34,9 @@ contract Sheepy404 is DN404, SheepyBase {
 
     /// @dev The base URI of the contract.
     string internal _baseURI;
+
+    /// @dev Whether a certain `tokenId` has been revealed.
+    LibBitmap.Bitmap internal _revealed;
 
     /// @dev How much native currency required to reveal a token.
     uint256 public revealPrice;
@@ -75,13 +83,23 @@ contract Sheepy404 is DN404, SheepyBase {
     /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
 
     /// @dev Allows the public to pay to reveal the `tokenIds`.
-    function reveal(uint256[] calldata tokenIds) public payable virtual {
+    function reveal(uint256[] memory tokenIds) public payable virtual {
         require(msg.value == revealPrice * tokenIds.length, "Wrong payment.");
         for (uint256 i; i < tokenIds.length; ++i) {
-            uint256 id = tokenIds[i];
+            uint256 id = tokenIds.get(i);
             if (!_exists(id)) revert TokenDoesNotExist();
+            _revealed.set(id);
             emit Reveal(id);
         }
+    }
+
+    /// @dev Returns if each of the `tokenIds` has been revealed.
+    function revealed(uint256[] memory tokenIds) public view returns (bool[] memory) {
+        uint256[] memory results = DynamicArrayLib.malloc(tokenIds.length);
+        for (uint256 i; i < tokenIds.length; ++i) {
+            results.set(i, _revealed.get(tokenIds.get(i)));
+        }
+        return results.asBoolArray();
     }
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
@@ -127,8 +145,17 @@ contract Sheepy404 is DN404, SheepyBase {
         // Emit a {Reset} event for each id if the caller isn't the mirror.
         if (msg.sender != _getDN404Storage().mirrorERC721) {
             for (uint256 i; i < ids.length; ++i) {
-                if (from[i] != to[i]) emit Reset(ids[i]);
+                if (from.toUint256Array().get(i) != to.toUint256Array().get(i)) {
+                    uint256 id = ids.get(i);
+                    _revealed.unset(id);
+                    emit Reset(id);
+                }
             }
         }
+    }
+
+    /// @dev Need to override this.
+    function _useAfterNFTTransfers() internal virtual override returns (bool) {
+        return true;
     }
 }
