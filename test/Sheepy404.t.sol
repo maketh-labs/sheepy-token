@@ -30,6 +30,7 @@ contract Sheepy404Test is Test {
     string internal constant _NAME = "Sheepy";
     string internal constant _SYMBOL = "Sheepy404";
     string internal constant _BASE_URI = "https://sheepyapi.com/{id}.json";
+    string internal constant _NOT_SO_SECRET = "SomethingSomethingNoGrief";
 
     function setUp() public {
         sheepy = new Sheepy404();
@@ -38,7 +39,7 @@ contract Sheepy404Test is Test {
     }
 
     function _initialize() internal {
-        sheepy.initialize(_ALICE, _BOB, address(mirror));
+        sheepy.initialize(_ALICE, _BOB, address(mirror), _NOT_SO_SECRET);
         assertEq(sheepy.balanceOf(_ALICE), _INITIAL_SUPPLY);
         mirror.pullOwner();
         assertEq(mirror.owner(), _ALICE);
@@ -51,7 +52,7 @@ contract Sheepy404Test is Test {
         vm.prank(_ALICE);
         sheepy.setRevealPrice(_REVEAL_PRICE);
 
-        sale.initialize(_ALICE, address(0));
+        sale.initialize(_ALICE, address(0), _NOT_SO_SECRET);
     }
 
     function testInitialize() public {

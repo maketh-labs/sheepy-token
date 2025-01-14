@@ -46,12 +46,14 @@ contract Sheepy404 is DN404, SheepyBase {
     /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
 
     /// @dev For initialization.
-    function initialize(address initialOwner, address initialAdmin, address mirror)
-        public
-        virtual
-    {
+    function initialize(
+        address initialOwner,
+        address initialAdmin,
+        address mirror,
+        string memory notSoSecret
+    ) public virtual {
         uint256 initialSupply = 1_000_000_000 * 10 ** 18;
-        _initializeSheepyBase(initialOwner, initialAdmin);
+        _initializeSheepyBase(initialOwner, initialAdmin, notSoSecret);
         _initializeDN404(initialSupply, initialOwner, mirror);
     }
 

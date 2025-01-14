@@ -69,8 +69,11 @@ contract SheepySale is SheepyBase {
     /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
 
     /// @dev For initialization.
-    function initialize(address initialOwner, address initialAdmin) public virtual {
-        _initializeSheepyBase(initialOwner, initialAdmin);
+    function initialize(address initialOwner, address initialAdmin, string memory notSoSecret)
+        public
+        virtual
+    {
+        _initializeSheepyBase(initialOwner, initialAdmin, notSoSecret);
     }
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
