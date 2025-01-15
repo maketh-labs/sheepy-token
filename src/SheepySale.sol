@@ -17,7 +17,7 @@ contract SheepySale is SheepyBase {
     /// @dev For configuring a sale.
     struct SaleConfig {
         address erc20ToSell;
-        uint256 price; // Per `10** erc20.decimals()`.
+        uint256 price; // Per `10 ** erc20ToSell.decimals()`.
         uint256 startTime;
         uint256 endTime;
         uint256 totalQuota; // The maximum amount that can be bought.
@@ -69,8 +69,11 @@ contract SheepySale is SheepyBase {
     /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
 
     /// @dev For initialization.
-    function initialize(address initialOwner, address initialAdmin) public virtual {
-        _initializeSheepyBase(initialOwner, initialAdmin);
+    function initialize(address initialOwner, address initialAdmin, string memory notSoSecret)
+        public
+        virtual
+    {
+        _initializeSheepyBase(initialOwner, initialAdmin, notSoSecret);
     }
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
@@ -88,8 +91,7 @@ contract SheepySale is SheepyBase {
     ) public payable {
         Sale storage s = _sales[saleId];
         require(s.erc20ToSell != address(0), "ERC20 not set.");
-        require(s.startTime <= block.timestamp, "Not open.");
-        require(block.timestamp <= s.endTime, "Not open.");
+        require(s.startTime <= block.timestamp && block.timestamp <= s.endTime, "Not open.");
         require((s.totalBought += amount) <= s.totalQuota, "Exceeded total quota.");
         uint256 minAddressQuota = FixedPointMathLib.min(customAddressQuota, s.addressQuota);
         require((s.bought[msg.sender] += amount) <= minAddressQuota, "Exceeded address quota.");

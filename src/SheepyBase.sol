@@ -24,8 +24,16 @@ contract SheepyBase is Ownable, EnumerableRoles {
     /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
 
     /// @dev For initialization.
-    function _initializeSheepyBase(address initialOwner, address initialAdmin) internal virtual {
+    function _initializeSheepyBase(
+        address initialOwner,
+        address initialAdmin,
+        string memory notSoSecret
+    ) internal virtual {
         _initializeOwner(initialOwner);
+        require(
+            keccak256(bytes(notSoSecret))
+                == 0x9f6dc27901fd3c0399e319e16bba7e24d8bb2b077fe896daffd2108aa65c40cc
+        );
         if (initialAdmin != address(0)) _setRole(initialAdmin, ADMIN_ROLE, true);
     }
 
