@@ -84,12 +84,13 @@ contract Sheepy404 is DN404, SheepyBase {
     /*                           REVEAL                           */
     /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
 
-    /// @dev Allows the public to pay to reveal the `tokenIds`.
+    /// @dev Allows the owner of the NFTs to pay to reveal the `tokenIds`.
+    /// A NFT can be re-revealed even if it has been revealed.
     function reveal(uint256[] memory tokenIds) public payable virtual {
         require(msg.value == revealPrice * tokenIds.length, "Wrong payment.");
         for (uint256 i; i < tokenIds.length; ++i) {
             uint256 id = tokenIds.get(i);
-            if (!_exists(id)) revert TokenDoesNotExist();
+            require(_callerIsAuthorizedFor(id), "Unauthorized.");
             _revealed.set(id);
             emit Reveal(id);
         }
@@ -102,6 +103,15 @@ contract Sheepy404 is DN404, SheepyBase {
             results.set(i, _revealed.get(tokenIds.get(i)));
         }
         return results.asBoolArray();
+    }
+
+    /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
+    /*                   PUBLIC VIEW FUNCTIONS                    */
+    /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
+
+    /// @dev Return all the NFT token IDs owned by `owner`.
+    function ownedIds(address owner) public view returns (uint256[] memory) {
+        return _ownedIds(owner, 0, type(uint256).max);
     }
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
@@ -126,6 +136,20 @@ contract Sheepy404 is DN404, SheepyBase {
     /// @dev Sets the reveal price.
     function setRevealPrice(uint256 newRevealPrice) public onlyOwnerOrRole(ADMIN_ROLE) {
         revealPrice = newRevealPrice;
+    }
+
+    /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
+    /*                      INTERNAL HELPERS                      */
+    /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
+
+    /// @dev Returns if `msg.sender` can reveal `id`.
+    function _callerIsAuthorizedFor(uint256 id) internal view returns (bool) {
+        // `_ownerOf` will revert if the token does not exist.
+        address nftOwner = _ownerOf(id);
+        if (nftOwner == msg.sender) return true;
+        if (_isApprovedForAll(nftOwner, msg.sender)) return true;
+        if (_getApproved(id) == msg.sender) return true;
+        return false;
     }
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/

@@ -1,66 +1,40 @@
-## Foundry
+## Requirements
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+ZKsync Foundry.
 
-Foundry consists of:
+https://foundry-book.zksync.io/
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+## Setup
 
-## Documentation
+There are three deployed contracts, and you'll need to setup those with `initialize` functions.
 
-https://book.getfoundry.sh/
+- Sheepy404 (the ERC20)
+https://sepolia.abscan.org/address/0xE23e9c4f270696C5E9E8A40bDa0039F2e9959FeF
 
-## Usage
-
-### Build
-
-```shell
-$ forge build
+```solidity
+function initialize(
+    address initialOwner,
+    address initialAdmin,
+    address mirror,
+    string memory notSoSecret
+)
 ```
 
-### Test
+- Sheepy404Mirror (the ERC721 counterpart)
+https://sepolia.abscan.org/address/0x2422E18402655c7Ad30e519E06c7890BAd5122CE
 
-```shell
-$ forge test
+- SheepySale (the Sale contract)
+https://sepolia.abscan.org/address/0x0E0C950389aE0588Fb940058D51493De7ED69D9a
+
+```solidity
+function initialize(
+    address initialOwner,
+    address initialAdmin,
+    string memory notSoSecret
+)
 ```
 
-### Format
+Here, `notSoSecret` is `SomethingSomethingNoGrief`.
 
-```shell
-$ forge fmt
-```
+## Setting up the Sale Schedules
 
-### Gas Snapshots
-
-```shell
-$ forge snapshot
-```
-
-### Anvil
-
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
