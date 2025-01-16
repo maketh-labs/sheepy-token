@@ -16,13 +16,23 @@ contract SheepySale is SheepyBase {
 
     /// @dev For configuring a sale.
     struct SaleConfig {
+        // The address of the ERC20 to sell.
         address erc20ToSell;
-        uint256 price; // Per `10 ** erc20ToSell.decimals()`.
+        // Amount of Ether in wei, per `10 ** erc20ToSell.decimals()` ERC20 in wei.
+        // `decimals` is usually 18 by default.
+        uint256 price;
+        // The sale start timestamp.
         uint256 startTime;
+        // The sale end timestamp.
         uint256 endTime;
-        uint256 totalQuota; // The maximum amount that can be bought.
-        uint256 addressQuota; // The maximum amount that can be bought per-address.
-        address signer; // Leave as `address(0)` if no WL required.
+        // The maximum amount in wei that can be bought.
+        uint256 totalQuota;
+        // The maximum amount in wei that can be bought per-address.
+        uint256 addressQuota;
+        // Leave as `address(0)` if no WL required.
+        // If WL is required, the hash to be signed is:
+        // `keccak256(abi.encode(keccak256("SheepySale"), saleId, msg.sender, customAddressQuota))`.
+        address signer;
     }
 
     /// @dev Holds the information for a sale.
