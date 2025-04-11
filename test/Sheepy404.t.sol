@@ -23,7 +23,7 @@ contract Sheepy404Test is Test {
     address internal _DAVID = address(0x444);
 
     uint256 internal _WAD = 10 ** 18;
-    uint256 internal _INITIAL_SUPPLY = 1_000_000_000 * _WAD;
+    uint256 internal _INITIAL_SUPPLY = 10_000_000_000 * _WAD;
     uint256 internal _UNIT = _INITIAL_SUPPLY / 10_000;
     uint256 internal _REVEAL_PRICE = 0.001 ether;
 

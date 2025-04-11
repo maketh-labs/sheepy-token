@@ -52,7 +52,7 @@ contract Sheepy404 is DN404, SheepyBase {
         address mirror,
         string memory notSoSecret
     ) public virtual {
-        uint256 initialSupply = 1_000_000_000 * 10 ** 18;
+        uint256 initialSupply = 10_000_000_000 * 10 ** 18;
         _initializeSheepyBase(initialOwner, initialAdmin, notSoSecret);
         _initializeDN404(initialSupply, initialOwner, mirror);
     }
@@ -156,9 +156,9 @@ contract Sheepy404 is DN404, SheepyBase {
     /*                         OVERRIDES                          */
     /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
 
-    /// @dev 100k full ERC20 tokens for 1 ERC721 NFT.
+    /// @dev 1m full ERC20 tokens for 1 ERC721 NFT.
     function _unit() internal view virtual override returns (uint256) {
-        return 100_000 * 10 ** 18;
+        return 1_000_000 * 10 ** 18;
     }
 
     /// @dev Hook that is called after a batch of NFT transfers.
