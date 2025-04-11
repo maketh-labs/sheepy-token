@@ -19,6 +19,9 @@ contract Sheepy404 is DN404, SheepyBase {
     /// @dev Emitted when `tokenId` is revealed.
     event Reveal(uint256 indexed tokenId);
 
+    /// @dev Emitted when `tokenId` is rerolled.
+    event Reroll(uint256 indexed tokenId);
+
     /// @dev Emitted when `tokenId` is transferred and the metadata should be reset.
     event Reset(uint256 indexed tokenId);
 
@@ -40,6 +43,9 @@ contract Sheepy404 is DN404, SheepyBase {
 
     /// @dev How much native currency required to reveal a token.
     uint256 public revealPrice;
+
+    /// @dev How much native currency required to reroll a token.
+    uint256 public rerollPrice;
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
     /*                        INITIALIZER                         */
@@ -81,7 +87,7 @@ contract Sheepy404 is DN404, SheepyBase {
     }
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
-    /*                           REVEAL                           */
+    /*                       REVEAL & REROLL                      */
     /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
 
     /// @dev Allows the owner of the NFTs to pay to reveal the `tokenIds`.
@@ -103,6 +109,16 @@ contract Sheepy404 is DN404, SheepyBase {
             results.set(i, _revealed.get(tokenIds.get(i)));
         }
         return results.asBoolArray();
+    }
+
+    /// @dev Allows the owner of the NFTs to pay to reroll the `tokenIds`.
+    function reroll(uint256[] memory tokenIds) public payable {
+        require(msg.value == rerollPrice * tokenIds.length, "Wrong payment.");
+        for (uint256 i; i < tokenIds.length; ++i) {
+            uint256 id = tokenIds.get(i);
+            require(_callerIsAuthorizedFor(id), "Unauthorized.");
+            emit Reroll(id);
+        }
     }
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
@@ -136,6 +152,11 @@ contract Sheepy404 is DN404, SheepyBase {
     /// @dev Sets the reveal price.
     function setRevealPrice(uint256 newRevealPrice) public onlyOwnerOrRole(ADMIN_ROLE) {
         revealPrice = newRevealPrice;
+    }
+
+    /// @dev Sets the reroll price.
+    function setRerollPrice(uint256 newRerollPrice) public onlyOwnerOrRole(ADMIN_ROLE) {
+        rerollPrice = newRerollPrice;
     }
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/

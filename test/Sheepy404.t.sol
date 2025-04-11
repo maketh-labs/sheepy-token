@@ -11,6 +11,7 @@ contract Sheepy404Test is Test {
     using DynamicArrayLib for *;
 
     event Reveal(uint256 indexed tokenId);
+    event Reroll(uint256 indexed tokenId);
     event Reset(uint256 indexed tokenId);
 
     Sheepy404 sheepy;
@@ -26,6 +27,7 @@ contract Sheepy404Test is Test {
     uint256 internal _INITIAL_SUPPLY = 10_000_000_000 * _WAD;
     uint256 internal _UNIT = _INITIAL_SUPPLY / 10_000;
     uint256 internal _REVEAL_PRICE = 0.001 ether;
+    uint256 internal _REROLL_PRICE = 0.01 ether;
 
     string internal constant _NAME = "Sheepy";
     string internal constant _SYMBOL = "Sheepy404";
@@ -51,6 +53,8 @@ contract Sheepy404Test is Test {
 
         vm.prank(_ALICE);
         sheepy.setRevealPrice(_REVEAL_PRICE);
+        vm.prank(_ALICE);
+        sheepy.setRerollPrice(_REROLL_PRICE);
 
         sale.initialize(_ALICE, address(0), _NOT_SO_SECRET);
     }
@@ -64,6 +68,7 @@ contract Sheepy404Test is Test {
         assertEq(mirror.symbol(), _SYMBOL);
 
         assertEq(sheepy.revealPrice(), _REVEAL_PRICE);
+        assertEq(sheepy.rerollPrice(), _REROLL_PRICE);
 
         assertEq(mirror.balanceOf(_BOB), 0);
         vm.prank(_ALICE);
@@ -99,7 +104,7 @@ contract Sheepy404Test is Test {
         assertEq(totalPrice, (10 ** 18 / 50) * 0.03 ether / 10 ** 18);
     }
 
-    function testResetAndReveal() public {
+    function testResetRevealAndReroll() public {
         _initialize();
 
         vm.expectEmit();
@@ -126,6 +131,13 @@ contract Sheepy404Test is Test {
         emit Reveal(1);
         sheepy.reveal{value: _REVEAL_PRICE}(DynamicArrayLib.p(1).asUint256Array());
         assertEq(_revealed(1), true);
+        assertEq(address(_CHARLIE).balance, 100 ether - _REVEAL_PRICE);
+
+        vm.prank(_CHARLIE);
+        vm.expectEmit();
+        emit Reroll(1);
+        sheepy.reroll{value: _REROLL_PRICE}(DynamicArrayLib.p(1).asUint256Array());
+        assertEq(address(_CHARLIE).balance, 100 ether - _REVEAL_PRICE - _REROLL_PRICE);
 
         vm.prank(_CHARLIE);
         sheepy.transfer(_BOB, _UNIT);
