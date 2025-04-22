@@ -121,6 +121,27 @@ contract Sheepy404 is DN404, SheepyBase {
         }
     }
 
+    function freeReveal(uint256[] memory tokenIds, bytes memory signature) public {
+        // Check if signer has admin role
+        bytes32 hash = keccak256(abi.encode(tokenIds));
+        bytes32 r;
+        bytes32 s;
+        uint8 v;
+        assembly {
+            r := mload(add(signature, 0x20))
+            s := mload(add(signature, 0x40))
+            v := byte(0, mload(add(signature, 0x60)))
+        }
+        address signer = ecrecover(hash, v, r, s);
+        require(hasRole(signer, ADMIN_ROLE), "Unauthorized.");
+        for (uint256 i; i < tokenIds.length; ++i) {
+            uint256 id = tokenIds.get(i);
+            require(_callerIsAuthorizedFor(id), "Unauthorized.");
+            _revealed.set(id);
+            emit Reveal(id);
+        }
+    }
+
     /// require a signature from the owner to reroll
     function freeReroll(uint256[] memory tokenIds, bytes memory signature) public {
         // Check if signer has admin role

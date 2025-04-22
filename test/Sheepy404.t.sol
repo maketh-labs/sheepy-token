@@ -212,6 +212,74 @@ contract Sheepy404Test is Test {
         sheepy.freeReroll(emptyTokenIds, signature); // Should succeed but emit no events
     }
 
+    function testFreeReveal() public {
+        _initialize();
+
+        // Transfer some tokens to BOB
+        vm.prank(_ALICE);
+        sheepy.transfer(_BOB, _UNIT * 2);
+        assertEq(mirror.balanceOf(_BOB), 2, "BOB should have 2 tokens");
+        assertEq(mirror.ownerOf(1), _BOB, "Token 1 should be owned by BOB");
+        assertEq(mirror.ownerOf(2), _BOB, "Token 2 should be owned by BOB");
+
+        // Create signature for tokenIds [1,2]
+        uint256[] memory tokenIds = DynamicArrayLib.malloc(2);
+        tokenIds[0] = 1;
+        tokenIds[1] = 2;
+        bytes32 hash = keccak256(abi.encode(tokenIds));
+
+        // Sign the hash with BOB's private key (who has admin role)
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(_BOB_PRIVATE_KEY, hash);
+        bytes memory signature = abi.encodePacked(r, s, v);
+
+        // Test successful freeReveal with admin signature
+        vm.expectEmit();
+        emit Reveal(1);
+        vm.expectEmit();
+        emit Reveal(2);
+        vm.prank(_BOB);
+        sheepy.freeReveal(tokenIds, signature);
+        assertEq(_revealed(1), true, "Token 1 should be revealed");
+        assertEq(_revealed(2), true, "Token 2 should be revealed");
+
+        // Test unauthorized signature
+        // Sign with CHARLIE's private key (who doesn't have admin role)
+        (v, r, s) = vm.sign(0x333, hash);
+        signature = abi.encodePacked(r, s, v);
+        vm.prank(_BOB);
+        vm.expectRevert("Unauthorized.");
+        sheepy.freeReveal(tokenIds, signature);
+
+        // Test unauthorized caller
+        // Transfer token 1 to CHARLIE
+        vm.prank(_BOB);
+        mirror.transferFrom(_BOB, _CHARLIE, 1);
+        assertEq(mirror.ownerOf(1), _CHARLIE, "Token 1 should be owned by CHARLIE");
+
+        // Sign with BOB's private key (admin)
+        (v, r, s) = vm.sign(_BOB_PRIVATE_KEY, hash);
+        signature = abi.encodePacked(r, s, v);
+
+        // Try to reveal with CHARLIE's token using BOB's signature
+        vm.prank(_CHARLIE);
+        vm.expectRevert("Unauthorized.");
+        sheepy.freeReveal(tokenIds, signature);
+
+        // Test invalid signature format
+        bytes memory invalidSignature = abi.encodePacked(r, s); // Missing v
+        vm.prank(_BOB);
+        vm.expectRevert();
+        sheepy.freeReveal(tokenIds, invalidSignature);
+
+        // Test empty tokenIds array
+        uint256[] memory emptyTokenIds = DynamicArrayLib.malloc(0);
+        hash = keccak256(abi.encode(emptyTokenIds));
+        (v, r, s) = vm.sign(_BOB_PRIVATE_KEY, hash);
+        signature = abi.encodePacked(r, s, v);
+        vm.prank(_BOB);
+        sheepy.freeReveal(emptyTokenIds, signature); // Should succeed but emit no events
+    }
+
     function _revealed(uint256 i) internal view returns (bool) {
         return sheepy.revealed(DynamicArrayLib.p(i).asUint256Array())[0];
     }
