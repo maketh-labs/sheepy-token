@@ -13,6 +13,7 @@ contract Sheepy404Test is Test {
     event Reveal(uint256 indexed tokenId);
     event Reroll(uint256 indexed tokenId);
     event Reset(uint256 indexed tokenId);
+    event AssetCount(uint256 newAssetCount);
 
     Sheepy404 sheepy;
     Sheepy404Mirror mirror;
@@ -278,6 +279,48 @@ contract Sheepy404Test is Test {
         signature = abi.encodePacked(r, s, v);
         vm.prank(_BOB);
         sheepy.freeReveal(emptyTokenIds, signature); // Should succeed but emit no events
+    }
+
+    function testSetAssetCount() public {
+        _initialize();
+
+        uint256 initialMinAssetCount = _INITIAL_SUPPLY / _UNIT;
+
+        // Test setting asset count by admin (BOB) to minimum allowed value
+        vm.expectEmit();
+        emit AssetCount(initialMinAssetCount);
+        vm.prank(_BOB);
+        sheepy.setAssetCount(initialMinAssetCount);
+
+        // Test setting asset count by admin (BOB) to a higher value
+        uint256 newAssetCount = initialMinAssetCount + 1000;
+        vm.expectEmit();
+        emit AssetCount(newAssetCount);
+        vm.prank(_BOB);
+        sheepy.setAssetCount(newAssetCount);
+
+        // Test setting asset count by owner (ALICE)
+        newAssetCount = initialMinAssetCount + 2000;
+        vm.expectEmit();
+        emit AssetCount(newAssetCount);
+        vm.prank(_ALICE);
+        sheepy.setAssetCount(newAssetCount);
+
+        // Test unauthorized caller (CHARLIE)
+        vm.prank(_CHARLIE);
+        vm.expectRevert();
+        sheepy.setAssetCount(initialMinAssetCount);
+
+        // Test setting asset count below minimum
+        vm.prank(_BOB);
+        vm.expectRevert("Asset count too small");
+        sheepy.setAssetCount(initialMinAssetCount - 1);
+
+        // Test setting max uint256
+        vm.expectEmit();
+        emit AssetCount(type(uint256).max);
+        vm.prank(_BOB);
+        sheepy.setAssetCount(type(uint256).max);
     }
 
     function _revealed(uint256 i) internal view returns (bool) {

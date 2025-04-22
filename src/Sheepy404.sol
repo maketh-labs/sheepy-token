@@ -25,6 +25,9 @@ contract Sheepy404 is DN404, SheepyBase {
     /// @dev Emitted when `tokenId` is transferred and the metadata should be reset.
     event Reset(uint256 indexed tokenId);
 
+    /// @dev Emitted when asset count is set.
+    event AssetCount(uint256 newAssetCount);
+
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
     /*                          STORAGE                           */
     /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
@@ -199,6 +202,13 @@ contract Sheepy404 is DN404, SheepyBase {
     /// @dev Sets the reroll price.
     function setRerollPrice(uint256 newRerollPrice) public onlyOwnerOrRole(ADMIN_ROLE) {
         rerollPrice = newRerollPrice;
+    }
+
+    /// @dev Sets the asset count.
+    function setAssetCount(uint256 newAssetCount) public onlyOwnerOrRole(ADMIN_ROLE) {
+        uint256 minAssetCount = totalSupply() / _unit();
+        require(newAssetCount >= minAssetCount, "Asset count too small");
+        emit AssetCount(newAssetCount);
     }
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
