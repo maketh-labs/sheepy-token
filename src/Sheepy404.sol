@@ -102,6 +102,7 @@ contract Sheepy404 is DN404, SheepyBase {
             require(_callerIsAuthorizedFor(id), "Unauthorized.");
             _revealed.set(id);
             emit Reveal(id);
+            _logMetadataUpdate(id);
         }
     }
 
@@ -121,6 +122,7 @@ contract Sheepy404 is DN404, SheepyBase {
             uint256 id = tokenIds.get(i);
             require(_callerIsAuthorizedFor(id), "Unauthorized.");
             emit Reroll(id);
+            _logMetadataUpdate(id);
         }
     }
 
@@ -142,6 +144,7 @@ contract Sheepy404 is DN404, SheepyBase {
             require(_callerIsAuthorizedFor(id), "Unauthorized.");
             _revealed.set(id);
             emit Reveal(id);
+            _logMetadataUpdate(id);
         }
     }
 
@@ -163,6 +166,7 @@ contract Sheepy404 is DN404, SheepyBase {
             uint256 id = tokenIds.get(i);
             require(_callerIsAuthorizedFor(id), "Unauthorized.");
             emit Reroll(id);
+            _logMetadataUpdate(id);
         }
     }
 
@@ -192,6 +196,7 @@ contract Sheepy404 is DN404, SheepyBase {
     /// @dev Sets the base URI.
     function setBaseURI(string memory newBaseURI) public virtual onlyOwnerOrRole(ADMIN_ROLE) {
         _baseURI = newBaseURI;
+        _logBatchMetadataUpdate(1, totalSupply() / _unit());
     }
 
     /// @dev Sets the reveal price.
@@ -248,6 +253,7 @@ contract Sheepy404 is DN404, SheepyBase {
                     uint256 id = ids.get(i);
                     _revealed.unset(id);
                     emit Reset(id);
+                    _logMetadataUpdate(id);
                 }
             }
         }
@@ -256,5 +262,28 @@ contract Sheepy404 is DN404, SheepyBase {
     /// @dev Need to override this.
     function _useAfterNFTTransfers() internal virtual override returns (bool) {
         return true;
+    }
+
+    /// @dev Helper function to log metadata update to the mirror
+    function _logMetadataUpdate(uint256 tokenId) internal {
+        address mirror = _getDN404Storage().mirrorERC721;
+        /// @solidity memory-safe-assembly
+        assembly {
+            mstore(0x00, 0x9e1569c7) // logMetadataUpdate(uint256)
+            mstore(0x20, tokenId)
+            pop(call(gas(), mirror, 0, 0x1c, 0x24, 0x00, 0x20))
+        }
+    }
+
+    /// @dev Helper function to log batch metadata update to the mirror
+    function _logBatchMetadataUpdate(uint256 fromTokenId, uint256 toTokenId) internal {
+        address mirror = _getDN404Storage().mirrorERC721;
+        /// @solidity memory-safe-assembly
+        assembly {
+            mstore(0x00, 0x5f3058f7) // logBatchMetadataUpdate(uint256,uint256)
+            mstore(0x20, fromTokenId)
+            mstore(0x40, toTokenId)
+            pop(call(gas(), mirror, 0, 0x1c, 0x44, 0x00, 0x20))
+        }
     }
 }

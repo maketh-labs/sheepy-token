@@ -35,3 +35,9 @@ function initialize(
 ```
 
 Here, `notSoSecret` is `SomethingSomethingNoGrief`.
+
+## Metadata Update Events
+
+This repository implements the [ERC-4906](https://eips.ethereum.org/EIPS/eip-4906)
+standard. The contracts emit `MetadataUpdate` or `BatchMetadataUpdate` whenever
+an NFT's metadata changes (e.g. reveal, reroll or base URI updates).
