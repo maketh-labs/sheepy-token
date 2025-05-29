@@ -14,6 +14,8 @@ contract Sheepy404Test is Test {
     event Reroll(uint256 indexed tokenId);
     event Reset(uint256 indexed tokenId);
     event AssetCount(uint256 newAssetCount);
+    event MetadataUpdate(uint256 _tokenId);
+    event BatchMetadataUpdate(uint256 _fromTokenId, uint256 _toTokenId);
 
     Sheepy404 sheepy;
     Sheepy404Mirror mirror;
@@ -325,5 +327,65 @@ contract Sheepy404Test is Test {
 
     function _revealed(uint256 i) internal view returns (bool) {
         return sheepy.revealed(DynamicArrayLib.p(i).asUint256Array())[0];
+    }
+
+    function testMetadataEvents() public {
+        _initialize();
+
+        // Transfer some tokens to BOB
+        vm.prank(_ALICE);
+        sheepy.transfer(_BOB, _UNIT * 2);
+
+        // Test reveal emits MetadataUpdate
+        vm.deal(_BOB, 100 ether);
+        vm.prank(_BOB);
+        vm.expectEmit();
+        emit Reveal(1);
+        vm.expectEmit(true, true, true, true, address(mirror));
+        emit MetadataUpdate(1);
+        sheepy.reveal{value: _REVEAL_PRICE}(DynamicArrayLib.p(1).asUint256Array());
+
+        // Test reroll emits MetadataUpdate
+        vm.prank(_BOB);
+        vm.expectEmit();
+        emit Reroll(1);
+        vm.expectEmit(true, true, true, true, address(mirror));
+        emit MetadataUpdate(1);
+        sheepy.reroll{value: _REROLL_PRICE}(DynamicArrayLib.p(1).asUint256Array());
+
+        // Test setBaseURI emits BatchMetadataUpdate
+        vm.prank(_ALICE);
+        vm.expectEmit(true, true, true, true, address(mirror));
+        emit BatchMetadataUpdate(1, _INITIAL_SUPPLY / _UNIT);
+        sheepy.setBaseURI("new-uri/{id}");
+    }
+
+    function testSupportsERC4906Interface() public {
+        _initialize();
+
+        // Test ERC-4906 interface support (hardcoded in the EIP)
+        bytes4 ERC4906_INTERFACE_ID = 0x49064906;
+        assertTrue(
+            mirror.supportsInterface(ERC4906_INTERFACE_ID), "Should support ERC-4906 interface"
+        );
+
+        // Test that it still supports other required interfaces
+        bytes4 ERC165_INTERFACE_ID = 0x01ffc9a7;
+        bytes4 ERC721_INTERFACE_ID = 0x80ac58cd;
+        bytes4 ERC721_METADATA_INTERFACE_ID = 0x5b5e139f;
+
+        assertTrue(
+            mirror.supportsInterface(ERC165_INTERFACE_ID), "Should support ERC-165 interface"
+        );
+        assertTrue(
+            mirror.supportsInterface(ERC721_INTERFACE_ID), "Should support ERC-721 interface"
+        );
+        assertTrue(
+            mirror.supportsInterface(ERC721_METADATA_INTERFACE_ID),
+            "Should support ERC-721 Metadata interface"
+        );
+
+        // Test random interface ID is not supported
+        assertFalse(mirror.supportsInterface(0xffffffff), "Should not support random interface");
     }
 }

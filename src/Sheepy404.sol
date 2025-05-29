@@ -6,10 +6,9 @@ import {DN404} from "dn404/src/DN404.sol";
 import {LibString} from "solady/utils/LibString.sol";
 import {LibBitmap} from "solady/utils/LibBitmap.sol";
 import {DynamicArrayLib} from "solady/utils/DynamicArrayLib.sol";
-import {IERC4906} from "./interfaces/IERC4906.sol";
 
 /// @dev This contract can be used by itself or as an proxy's implementation.
-contract Sheepy404 is DN404, SheepyBase, IERC4906 {
+contract Sheepy404 is DN404, SheepyBase {
     using LibBitmap for *;
     using DynamicArrayLib for *;
 
@@ -103,7 +102,7 @@ contract Sheepy404 is DN404, SheepyBase, IERC4906 {
             require(_callerIsAuthorizedFor(id), "Unauthorized.");
             _revealed.set(id);
             emit Reveal(id);
-            emit MetadataUpdate(id);
+            _logMetadataUpdate(id);
         }
     }
 
@@ -123,7 +122,7 @@ contract Sheepy404 is DN404, SheepyBase, IERC4906 {
             uint256 id = tokenIds.get(i);
             require(_callerIsAuthorizedFor(id), "Unauthorized.");
             emit Reroll(id);
-            emit MetadataUpdate(id);
+            _logMetadataUpdate(id);
         }
     }
 
@@ -145,7 +144,7 @@ contract Sheepy404 is DN404, SheepyBase, IERC4906 {
             require(_callerIsAuthorizedFor(id), "Unauthorized.");
             _revealed.set(id);
             emit Reveal(id);
-            emit MetadataUpdate(id);
+            _logMetadataUpdate(id);
         }
     }
 
@@ -167,7 +166,7 @@ contract Sheepy404 is DN404, SheepyBase, IERC4906 {
             uint256 id = tokenIds.get(i);
             require(_callerIsAuthorizedFor(id), "Unauthorized.");
             emit Reroll(id);
-            emit MetadataUpdate(id);
+            _logMetadataUpdate(id);
         }
     }
 
@@ -197,7 +196,7 @@ contract Sheepy404 is DN404, SheepyBase, IERC4906 {
     /// @dev Sets the base URI.
     function setBaseURI(string memory newBaseURI) public virtual onlyOwnerOrRole(ADMIN_ROLE) {
         _baseURI = newBaseURI;
-        emit BatchMetadataUpdate(1, totalSupply() / _unit());
+        _logBatchMetadataUpdate(1, totalSupply() / _unit());
     }
 
     /// @dev Sets the reveal price.
@@ -254,7 +253,7 @@ contract Sheepy404 is DN404, SheepyBase, IERC4906 {
                     uint256 id = ids.get(i);
                     _revealed.unset(id);
                     emit Reset(id);
-                    emit MetadataUpdate(id);
+                    _logMetadataUpdate(id);
                 }
             }
         }
@@ -265,15 +264,26 @@ contract Sheepy404 is DN404, SheepyBase, IERC4906 {
         return true;
     }
 
-    /// @inheritdoc DN404
-    function supportsInterface(bytes4 interfaceId)
-        public
-        view
-        virtual
-        override
-        returns (bool)
-    {
-        return interfaceId == type(IERC4906).interfaceId
-            || super.supportsInterface(interfaceId);
+    /// @dev Helper function to log metadata update to the mirror
+    function _logMetadataUpdate(uint256 tokenId) internal {
+        address mirror = _getDN404Storage().mirrorERC721;
+        /// @solidity memory-safe-assembly
+        assembly {
+            mstore(0x00, 0x9e1569c7) // logMetadataUpdate(uint256)
+            mstore(0x20, tokenId)
+            pop(call(gas(), mirror, 0, 0x1c, 0x24, 0x00, 0x20))
+        }
+    }
+
+    /// @dev Helper function to log batch metadata update to the mirror
+    function _logBatchMetadataUpdate(uint256 fromTokenId, uint256 toTokenId) internal {
+        address mirror = _getDN404Storage().mirrorERC721;
+        /// @solidity memory-safe-assembly
+        assembly {
+            mstore(0x00, 0x5f3058f7) // logBatchMetadataUpdate(uint256,uint256)
+            mstore(0x20, fromTokenId)
+            mstore(0x40, toTokenId)
+            pop(call(gas(), mirror, 0, 0x1c, 0x44, 0x00, 0x20))
+        }
     }
 }
