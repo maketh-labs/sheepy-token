@@ -6,9 +6,11 @@ import "../src/Sheepy404.sol";
 import "../src/Sheepy404Mirror.sol";
 import "../src/SheepySale.sol";
 import "solady/utils/DynamicArrayLib.sol";
+import "solady/utils/ECDSA.sol";
 
 contract Sheepy404Test is Test {
     using DynamicArrayLib for *;
+    using ECDSA for bytes32;
 
     event Reveal(uint256 indexed tokenId);
     event Reroll(uint256 indexed tokenId);
@@ -387,5 +389,245 @@ contract Sheepy404Test is Test {
 
         // Test random interface ID is not supported
         assertFalse(mirror.supportsInterface(0xffffffff), "Should not support random interface");
+    }
+
+    function testAirdropClaim() public {
+        _initialize();
+
+        // Setup airdrop sale with price = 0
+        SheepySale.SaleConfig memory c;
+        c.erc20ToSell = address(sheepy);
+        c.price = 0; // Free airdrop
+        c.startTime = 1;
+        c.endTime = block.timestamp + 1000;
+        c.totalQuota = 1000 * _WAD;
+        c.addressQuota = 100 * _WAD;
+        c.signer = _BOB; // BOB will sign the claims
+
+        vm.prank(_ALICE);
+        sale.setSale(1, c);
+
+        // Fund the sale contract with tokens
+        vm.prank(_ALICE);
+        sheepy.transfer(address(sale), 1000 * _WAD);
+
+        // Create signature for CHARLIE to claim 50 tokens
+        uint256 claimAmount = 50 * _WAD;
+        uint256 customQuota = 100 * _WAD;
+        bytes32 hash = keccak256("SheepySale");
+        hash = keccak256(abi.encode(hash, uint256(1), _CHARLIE, customQuota));
+        hash = hash.toEthSignedMessageHash();
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(_BOB_PRIVATE_KEY, hash);
+        bytes memory signature = abi.encodePacked(r, s, v);
+
+        // Test successful claim
+        uint256 charlieBalanceBefore = sheepy.balanceOf(_CHARLIE);
+        vm.prank(_CHARLIE);
+        sale.buy(1, _CHARLIE, claimAmount, customQuota, signature);
+        assertEq(sheepy.balanceOf(_CHARLIE), charlieBalanceBefore + claimAmount);
+        assertEq(sale.bought(1, _CHARLIE), claimAmount);
+
+        // Test multiple claims with same signature (should work until quota hit)
+        vm.prank(_CHARLIE);
+        sale.buy(1, _CHARLIE, claimAmount, customQuota, signature);
+        assertEq(sheepy.balanceOf(_CHARLIE), charlieBalanceBefore + claimAmount * 2);
+        assertEq(sale.bought(1, _CHARLIE), claimAmount * 2);
+
+        // Test quota exceeded
+        vm.prank(_CHARLIE);
+        vm.expectRevert("Exceeded address quota.");
+        sale.buy(1, _CHARLIE, claimAmount, customQuota, signature);
+    }
+
+    function testAirdropClaimWithInvalidSignature() public {
+        _initialize();
+
+        // Setup airdrop sale
+        SheepySale.SaleConfig memory c;
+        c.erc20ToSell = address(sheepy);
+        c.price = 0;
+        c.startTime = 1;
+        c.endTime = block.timestamp + 1000;
+        c.totalQuota = 1000 * _WAD;
+        c.addressQuota = 100 * _WAD;
+        c.signer = _BOB;
+
+        vm.prank(_ALICE);
+        sale.setSale(1, c);
+
+        vm.prank(_ALICE);
+        sheepy.transfer(address(sale), 1000 * _WAD);
+
+        uint256 claimAmount = 50 * _WAD;
+        uint256 customQuota = 100 * _WAD;
+
+        // Test with wrong signer (CHARLIE instead of BOB)
+        bytes32 hash = keccak256("SheepySale");
+        hash = keccak256(abi.encode(hash, uint256(1), _CHARLIE, customQuota));
+        hash = hash.toEthSignedMessageHash();
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(0x333, hash); // Wrong private key
+        bytes memory wrongSignature = abi.encodePacked(r, s, v);
+
+        vm.prank(_CHARLIE);
+        vm.expectRevert("Invalid signature.");
+        sale.buy(1, _CHARLIE, claimAmount, customQuota, wrongSignature);
+
+        // Test signature for different user
+        hash = keccak256("SheepySale");
+        hash = keccak256(abi.encode(hash, uint256(1), _DAVID, customQuota));
+        hash = hash.toEthSignedMessageHash();
+        (v, r, s) = vm.sign(_BOB_PRIVATE_KEY, hash);
+        bytes memory davidSignature = abi.encodePacked(r, s, v);
+
+        vm.prank(_CHARLIE); // CHARLIE tries to use DAVID's signature
+        vm.expectRevert("Invalid signature.");
+        sale.buy(1, _CHARLIE, claimAmount, customQuota, davidSignature);
+    }
+
+    function testAirdropClaimQuotaLimits() public {
+        _initialize();
+
+        // Setup airdrop with small quotas
+        SheepySale.SaleConfig memory c;
+        c.erc20ToSell = address(sheepy);
+        c.price = 0;
+        c.startTime = 1;
+        c.endTime = block.timestamp + 1000;
+        c.totalQuota = 150 * _WAD; // Total quota smaller than address quota
+        c.addressQuota = 200 * _WAD;
+        c.signer = _BOB;
+
+        vm.prank(_ALICE);
+        sale.setSale(1, c);
+
+        vm.prank(_ALICE);
+        sheepy.transfer(address(sale), 1000 * _WAD);
+
+        uint256 claimAmount = 100 * _WAD;
+        uint256 customQuota = 200 * _WAD;
+
+        // CHARLIE claims first
+        bytes32 hash = keccak256("SheepySale");
+        hash = keccak256(abi.encode(hash, uint256(1), _CHARLIE, customQuota));
+        hash = hash.toEthSignedMessageHash();
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(_BOB_PRIVATE_KEY, hash);
+        bytes memory charlieSignature = abi.encodePacked(r, s, v);
+
+        vm.prank(_CHARLIE);
+        sale.buy(1, _CHARLIE, claimAmount, customQuota, charlieSignature);
+
+        // DAVID tries to claim but exceeds total quota
+        hash = keccak256("SheepySale");
+        hash = keccak256(abi.encode(hash, uint256(1), _DAVID, customQuota));
+        hash = hash.toEthSignedMessageHash();
+        (v, r, s) = vm.sign(_BOB_PRIVATE_KEY, hash);
+        bytes memory davidSignature = abi.encodePacked(r, s, v);
+
+        vm.prank(_DAVID);
+        vm.expectRevert("Exceeded total quota.");
+        sale.buy(1, _DAVID, claimAmount, customQuota, davidSignature);
+    }
+
+    function testAirdropClaimTimeBounds() public {
+        _initialize();
+
+        // Setup airdrop with time bounds
+        SheepySale.SaleConfig memory c;
+        c.erc20ToSell = address(sheepy);
+        c.price = 0;
+        c.startTime = block.timestamp + 100;
+        c.endTime = block.timestamp + 200;
+        c.totalQuota = 1000 * _WAD;
+        c.addressQuota = 100 * _WAD;
+        c.signer = _BOB;
+
+        vm.prank(_ALICE);
+        sale.setSale(1, c);
+
+        vm.prank(_ALICE);
+        sheepy.transfer(address(sale), 1000 * _WAD);
+
+        uint256 claimAmount = 50 * _WAD;
+        uint256 customQuota = 100 * _WAD;
+        bytes32 hash = keccak256("SheepySale");
+        hash = keccak256(abi.encode(hash, uint256(1), _CHARLIE, customQuota));
+        hash = hash.toEthSignedMessageHash();
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(_BOB_PRIVATE_KEY, hash);
+        bytes memory signature = abi.encodePacked(r, s, v);
+
+        // Test claim before start time
+        vm.prank(_CHARLIE);
+        vm.expectRevert("Not open.");
+        sale.buy(1, _CHARLIE, claimAmount, customQuota, signature);
+
+        // Test claim during valid time
+        vm.warp(block.timestamp + 150);
+        vm.prank(_CHARLIE);
+        sale.buy(1, _CHARLIE, claimAmount, customQuota, signature);
+        assertEq(sheepy.balanceOf(_CHARLIE), claimAmount);
+
+        // Test claim after end time
+        vm.warp(block.timestamp + 100);
+        vm.prank(_CHARLIE);
+        vm.expectRevert("Not open.");
+        sale.buy(1, _CHARLIE, claimAmount, customQuota, signature);
+    }
+
+    function testAirdropWithCustomQuota() public {
+        _initialize();
+
+        // Setup airdrop
+        SheepySale.SaleConfig memory c;
+        c.erc20ToSell = address(sheepy);
+        c.price = 0;
+        c.startTime = 1;
+        c.endTime = block.timestamp + 1000;
+        c.totalQuota = 1000 * _WAD;
+        c.addressQuota = 50 * _WAD; // Default quota is 50
+        c.signer = _BOB;
+
+        vm.prank(_ALICE);
+        sale.setSale(1, c);
+
+        vm.prank(_ALICE);
+        sheepy.transfer(address(sale), 1000 * _WAD);
+
+        // CHARLIE gets custom quota of 100 (higher than default)
+        // But effective quota is min(100, 50) = 50
+        uint256 charlieCustomQuota = 100 * _WAD;
+        bytes32 hash = keccak256("SheepySale");
+        hash = keccak256(abi.encode(hash, uint256(1), _CHARLIE, charlieCustomQuota));
+        hash = hash.toEthSignedMessageHash();
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(_BOB_PRIVATE_KEY, hash);
+        bytes memory charlieSignature = abi.encodePacked(r, s, v);
+
+        // Should succeed because claim amount (45) is within effective quota of min(100, 50) = 50
+        vm.prank(_CHARLIE);
+        sale.buy(1, _CHARLIE, 45 * _WAD, charlieCustomQuota, charlieSignature);
+        assertEq(sheepy.balanceOf(_CHARLIE), 45 * _WAD);
+
+        // CHARLIE tries to claim 10 more (total would be 55), should fail because effective quota is 50
+        vm.prank(_CHARLIE);
+        vm.expectRevert("Exceeded address quota.");
+        sale.buy(1, _CHARLIE, 10 * _WAD, charlieCustomQuota, charlieSignature);
+
+        // DAVID gets custom quota of 30 (lower than default)
+        // Effective quota is min(30, 50) = 30
+        uint256 davidCustomQuota = 30 * _WAD;
+        hash = keccak256("SheepySale");
+        hash = keccak256(abi.encode(hash, uint256(1), _DAVID, davidCustomQuota));
+        hash = hash.toEthSignedMessageHash();
+        (v, r, s) = vm.sign(_BOB_PRIVATE_KEY, hash);
+        bytes memory davidSignature = abi.encodePacked(r, s, v);
+
+        // Should succeed when claiming within custom quota (30)
+        vm.prank(_DAVID);
+        sale.buy(1, _DAVID, 25 * _WAD, davidCustomQuota, davidSignature);
+        assertEq(sheepy.balanceOf(_DAVID), 25 * _WAD);
+
+        // DAVID tries to claim 10 more (total would be 35), should fail because custom quota is 30
+        vm.prank(_DAVID);
+        vm.expectRevert("Exceeded address quota.");
+        sale.buy(1, _DAVID, 10 * _WAD, davidCustomQuota, davidSignature);
     }
 }
