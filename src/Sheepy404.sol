@@ -106,15 +106,6 @@ contract Sheepy404 is DN404, SheepyBase {
         }
     }
 
-    /// @dev Returns if each of the `tokenIds` has been revealed.
-    function revealed(uint256[] memory tokenIds) public view returns (bool[] memory) {
-        uint256[] memory results = DynamicArrayLib.malloc(tokenIds.length);
-        for (uint256 i; i < tokenIds.length; ++i) {
-            results.set(i, _revealed.get(tokenIds.get(i)));
-        }
-        return results.asBoolArray();
-    }
-
     /// @dev Allows the owner of the NFTs to pay to reroll the `tokenIds`.
     function reroll(uint256[] memory tokenIds) public payable {
         require(msg.value == rerollPrice * tokenIds.length, "Wrong payment.");
@@ -168,6 +159,15 @@ contract Sheepy404 is DN404, SheepyBase {
             emit Reroll(id);
             _logMetadataUpdate(id);
         }
+    }
+
+    /// @dev Returns if each of the `tokenIds` has been revealed.
+    function revealed(uint256[] memory tokenIds) public view returns (bool[] memory) {
+        uint256[] memory results = DynamicArrayLib.malloc(tokenIds.length);
+        for (uint256 i; i < tokenIds.length; ++i) {
+            results.set(i, _revealed.get(tokenIds.get(i)));
+        }
+        return results.asBoolArray();
     }
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
@@ -234,11 +234,6 @@ contract Sheepy404 is DN404, SheepyBase {
     /*                         OVERRIDES                          */
     /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
 
-    /// @dev 1m full ERC20 tokens for 1 ERC721 NFT.
-    function _unit() internal view virtual override returns (uint256) {
-        return 1_000_000 * 10 ** 18;
-    }
-
     /// @dev Hook that is called after a batch of NFT transfers.
     /// The lengths of `from`, `to`, and `ids` are guaranteed to be the same.
     function _afterNFTTransfers(address[] memory from, address[] memory to, uint256[] memory ids)
@@ -285,5 +280,10 @@ contract Sheepy404 is DN404, SheepyBase {
             mstore(0x40, toTokenId)
             pop(call(gas(), mirror, 0, 0x1c, 0x44, 0x00, 0x20))
         }
+    }
+
+    /// @dev 1m full ERC20 tokens for 1 ERC721 NFT.
+    function _unit() internal view virtual override returns (uint256) {
+        return 1_000_000 * 10 ** 18;
     }
 }
