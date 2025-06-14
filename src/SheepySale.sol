@@ -99,6 +99,7 @@ contract SheepySale is SheepyBase {
         uint256 customAddressQuota,
         bytes calldata signature
     ) public payable {
+        require(amount > 0, "Amount must be greater than zero.");
         Sale storage s = _sales[saleId];
         require(s.erc20ToSell != address(0), "ERC20 not set.");
         require(s.startTime <= block.timestamp && block.timestamp <= s.endTime, "Not open.");
