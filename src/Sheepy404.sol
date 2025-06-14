@@ -7,7 +7,7 @@ import {LibString} from "solady/utils/LibString.sol";
 import {LibBitmap} from "solady/utils/LibBitmap.sol";
 import {DynamicArrayLib} from "solady/utils/DynamicArrayLib.sol";
 
-/// @dev This contract can be used by itself or as an proxy's implementation.
+/// @dev This contract can be used by itself or as a proxy's implementation.
 contract Sheepy404 is DN404, SheepyBase {
     using LibBitmap for *;
     using DynamicArrayLib for *;
