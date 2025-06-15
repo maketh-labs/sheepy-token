@@ -100,6 +100,7 @@ contract Sheepy404 is DN404, SheepyBase {
         for (uint256 i; i < tokenIds.length; ++i) {
             uint256 id = tokenIds.get(i);
             require(_callerIsAuthorizedFor(id), "Unauthorized.");
+            if (_revealed.get(id)) continue;
             _revealed.set(id);
             emit Reveal(id);
             _logMetadataUpdate(id);
