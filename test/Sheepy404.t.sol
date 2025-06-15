@@ -40,6 +40,11 @@ contract Sheepy404Test is Test {
     string internal constant _BASE_URI = "https://sheepyapi.com/{id}.json";
     string internal constant _NOT_SO_SECRET = "SomethingSomethingNoGrief";
 
+    bytes32 private constant _FREE_REVEAL_TYPEHASH =
+        0x1b1611af788723511f281de0f21fe4152038dc00a223c33af7214129add904b7;
+    bytes32 private constant _FREE_REROLL_TYPEHASH =
+        0x5a781c0332c2b7e3b5af87f97204f9d94e66671cf0d9d1d9e7605f4429e12893;
+
     function setUp() public {
         sheepy = new Sheepy404();
         mirror = new Sheepy404Mirror();
@@ -165,10 +170,14 @@ contract Sheepy404Test is Test {
         uint256[] memory tokenIds = DynamicArrayLib.malloc(2);
         tokenIds[0] = 1;
         tokenIds[1] = 2;
-        bytes32 hash = keccak256(abi.encode(tokenIds));
-
-        // Sign the hash with BOB's private key (who has admin role)
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(_BOB_PRIVATE_KEY, hash);
+        // EIP-712 struct hash: keccak256(abi.encode(_FREE_REROLL_TYPEHASH, tokenIds))
+        bytes32 structHash = keccak256(abi.encode(_FREE_REROLL_TYPEHASH, tokenIds));
+        // EIP-712 domain separator: use sheepy.DOMAIN_SEPARATOR()
+        bytes32 domainSeparator = sheepy.DOMAIN_SEPARATOR();
+        // EIP-712 digest: keccak256("\x19\x01" || domainSeparator || structHash)
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
+        // Sign the digest with BOB's private key (who has admin role)
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(_BOB_PRIVATE_KEY, digest);
         bytes memory signature = abi.encodePacked(r, s, v);
 
         // Test successful freeReroll with admin signature
@@ -181,7 +190,7 @@ contract Sheepy404Test is Test {
 
         // Test unauthorized signature
         // Sign with CHARLIE's private key (who doesn't have admin role)
-        (v, r, s) = vm.sign(0x333, hash);
+        (v, r, s) = vm.sign(0x333, digest);
         signature = abi.encodePacked(r, s, v);
         vm.prank(_BOB);
         vm.expectRevert("Unauthorized.");
@@ -194,7 +203,7 @@ contract Sheepy404Test is Test {
         assertEq(mirror.ownerOf(1), _CHARLIE, "Token 1 should be owned by CHARLIE");
 
         // Sign with BOB's private key (admin)
-        (v, r, s) = vm.sign(_BOB_PRIVATE_KEY, hash);
+        (v, r, s) = vm.sign(_BOB_PRIVATE_KEY, digest);
         signature = abi.encodePacked(r, s, v);
 
         // Try to reroll with CHARLIE's token using BOB's signature
@@ -210,8 +219,9 @@ contract Sheepy404Test is Test {
 
         // Test empty tokenIds array
         uint256[] memory emptyTokenIds = DynamicArrayLib.malloc(0);
-        hash = keccak256(abi.encode(emptyTokenIds));
-        (v, r, s) = vm.sign(_BOB_PRIVATE_KEY, hash);
+        structHash = keccak256(abi.encode(_FREE_REROLL_TYPEHASH, emptyTokenIds));
+        digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
+        (v, r, s) = vm.sign(_BOB_PRIVATE_KEY, digest);
         signature = abi.encodePacked(r, s, v);
         vm.prank(_BOB);
         sheepy.freeReroll(emptyTokenIds, signature); // Should succeed but emit no events
@@ -231,10 +241,14 @@ contract Sheepy404Test is Test {
         uint256[] memory tokenIds = DynamicArrayLib.malloc(2);
         tokenIds[0] = 1;
         tokenIds[1] = 2;
-        bytes32 hash = keccak256(abi.encode(tokenIds));
-
-        // Sign the hash with BOB's private key (who has admin role)
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(_BOB_PRIVATE_KEY, hash);
+        // EIP-712 struct hash: keccak256(abi.encode(_FREE_REVEAL_TYPEHASH, tokenIds))
+        bytes32 structHash = keccak256(abi.encode(_FREE_REVEAL_TYPEHASH, tokenIds));
+        // EIP-712 domain separator: use sheepy.DOMAIN_SEPARATOR()
+        bytes32 domainSeparator = sheepy.DOMAIN_SEPARATOR();
+        // EIP-712 digest: keccak256("\x19\x01" || domainSeparator || structHash)
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
+        // Sign the digest with BOB's private key (who has admin role)
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(_BOB_PRIVATE_KEY, digest);
         bytes memory signature = abi.encodePacked(r, s, v);
 
         // Test successful freeReveal with admin signature
@@ -249,7 +263,7 @@ contract Sheepy404Test is Test {
 
         // Test unauthorized signature
         // Sign with CHARLIE's private key (who doesn't have admin role)
-        (v, r, s) = vm.sign(0x333, hash);
+        (v, r, s) = vm.sign(0x333, digest);
         signature = abi.encodePacked(r, s, v);
         vm.prank(_BOB);
         vm.expectRevert("Unauthorized.");
@@ -262,7 +276,7 @@ contract Sheepy404Test is Test {
         assertEq(mirror.ownerOf(1), _CHARLIE, "Token 1 should be owned by CHARLIE");
 
         // Sign with BOB's private key (admin)
-        (v, r, s) = vm.sign(_BOB_PRIVATE_KEY, hash);
+        (v, r, s) = vm.sign(_BOB_PRIVATE_KEY, digest);
         signature = abi.encodePacked(r, s, v);
 
         // Try to reveal with CHARLIE's token using BOB's signature
@@ -278,8 +292,9 @@ contract Sheepy404Test is Test {
 
         // Test empty tokenIds array
         uint256[] memory emptyTokenIds = DynamicArrayLib.malloc(0);
-        hash = keccak256(abi.encode(emptyTokenIds));
-        (v, r, s) = vm.sign(_BOB_PRIVATE_KEY, hash);
+        structHash = keccak256(abi.encode(_FREE_REVEAL_TYPEHASH, emptyTokenIds));
+        digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
+        (v, r, s) = vm.sign(_BOB_PRIVATE_KEY, digest);
         signature = abi.encodePacked(r, s, v);
         vm.prank(_BOB);
         sheepy.freeReveal(emptyTokenIds, signature); // Should succeed but emit no events
@@ -465,7 +480,7 @@ contract Sheepy404Test is Test {
         bytes32 hash = keccak256("SheepySale");
         hash = keccak256(abi.encode(hash, uint256(1), _CHARLIE, customQuota));
         hash = hash.toEthSignedMessageHash();
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(0x333, hash); // Wrong private key
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(0x333, hash);
         bytes memory wrongSignature = abi.encodePacked(r, s, v);
 
         vm.prank(_CHARLIE);

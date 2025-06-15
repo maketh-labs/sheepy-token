@@ -6,9 +6,10 @@ import {DN404} from "dn404/src/DN404.sol";
 import {LibString} from "solady/utils/LibString.sol";
 import {LibBitmap} from "solady/utils/LibBitmap.sol";
 import {DynamicArrayLib} from "solady/utils/DynamicArrayLib.sol";
+import {EIP712} from "solady/utils/EIP712.sol";
 
 /// @dev This contract can be used by itself or as a proxy's implementation.
-contract Sheepy404 is DN404, SheepyBase {
+contract Sheepy404 is DN404, SheepyBase, EIP712 {
     using LibBitmap for *;
     using DynamicArrayLib for *;
 
@@ -27,6 +28,18 @@ contract Sheepy404 is DN404, SheepyBase {
 
     /// @dev Emitted when asset count is set.
     event AssetCount(uint256 newAssetCount);
+
+    /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
+    /*                         CONSTANTS                          */
+    /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
+
+    /// @dev `keccak256("FreeReveal(uint256[] tokenIds)")`.
+    bytes32 private constant _FREE_REVEAL_TYPEHASH =
+        0x1b1611af788723511f281de0f21fe4152038dc00a223c33af7214129add904b7;
+
+    /// @dev `keccak256("FreeReroll(uint256[] tokenIds)")`.
+    bytes32 private constant _FREE_REROLL_TYPEHASH =
+        0x5a781c0332c2b7e3b5af87f97204f9d94e66671cf0d9d1d9e7605f4429e12893;
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
     /*                          STORAGE                           */
@@ -89,6 +102,11 @@ contract Sheepy404 is DN404, SheepyBase {
         }
     }
 
+    /// @dev Returns the domain separator for EIP-712 typed data signing.
+    function DOMAIN_SEPARATOR() external view returns (bytes32 result) {
+        return _domainSeparator();
+    }
+
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
     /*                       REVEAL & REROLL                      */
     /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
@@ -119,7 +137,7 @@ contract Sheepy404 is DN404, SheepyBase {
 
     function freeReveal(uint256[] memory tokenIds, bytes memory signature) public {
         // Check if signer has admin role
-        bytes32 hash = keccak256(abi.encode(tokenIds));
+        bytes32 hash = _hashTypedData(keccak256(abi.encode(_FREE_REVEAL_TYPEHASH, tokenIds)));
         bytes32 r;
         bytes32 s;
         uint8 v;
@@ -142,7 +160,7 @@ contract Sheepy404 is DN404, SheepyBase {
     /// require a signature from the owner to reroll
     function freeReroll(uint256[] memory tokenIds, bytes memory signature) public {
         // Check if signer has admin role
-        bytes32 hash = keccak256(abi.encode(tokenIds));
+        bytes32 hash = _hashTypedData(keccak256(abi.encode(_FREE_REROLL_TYPEHASH, tokenIds)));
         bytes32 r;
         bytes32 s;
         uint8 v;
@@ -285,5 +303,15 @@ contract Sheepy404 is DN404, SheepyBase {
     /// @dev 1m full ERC20 tokens for 1 ERC721 NFT.
     function _unit() internal view virtual override returns (uint256) {
         return 1_000_000 * 10 ** 18;
+    }
+
+    /// @dev Returns the name and version of the contract. Override from EIP712.
+    function _domainNameAndVersion()
+        internal
+        pure
+        override
+        returns (string memory, string memory)
+    {
+        return ("Sheepy404", "1");
     }
 }
