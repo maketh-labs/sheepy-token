@@ -50,6 +50,13 @@ contract Sheepy404Test is Test {
         mirror = new Sheepy404Mirror();
         sale = new SheepySale();
         (_BOB, _BOB_PRIVATE_KEY) = makeAddrAndKey("bob");
+
+        // Mock LibAGW.isAGW to always return false globally
+        vm.mockCall(
+            0xd5E3efDA6bB5aB545cc2358796E96D9033496Dda,
+            abi.encodeWithSignature("isAGW(address)"),
+            abi.encode(false)
+        );
     }
 
     function _initialize() internal {
