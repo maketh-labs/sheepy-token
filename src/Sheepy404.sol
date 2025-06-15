@@ -7,6 +7,7 @@ import {LibString} from "solady/utils/LibString.sol";
 import {LibBitmap} from "solady/utils/LibBitmap.sol";
 import {DynamicArrayLib} from "solady/utils/DynamicArrayLib.sol";
 import {EIP712} from "solady/utils/EIP712.sol";
+import {ECDSA} from "solady/utils/ECDSA.sol";
 
 /// @dev This contract can be used by itself or as a proxy's implementation.
 contract Sheepy404 is DN404, SheepyBase, EIP712 {
@@ -33,13 +34,13 @@ contract Sheepy404 is DN404, SheepyBase, EIP712 {
     /*                         CONSTANTS                          */
     /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
 
-    /// @dev `keccak256("FreeReveal(uint256[] tokenIds)")`.
+    /// @dev `keccak256("FreeReveal(uint256[] tokenIds,uint256 deadline)")`.
     bytes32 private constant _FREE_REVEAL_TYPEHASH =
-        0x1b1611af788723511f281de0f21fe4152038dc00a223c33af7214129add904b7;
+        0x131842ed0075e1b61a69a5a4ee3616ded1e423caf2e195e874bafa82bff79a2e;
 
-    /// @dev `keccak256("FreeReroll(uint256[] tokenIds)")`.
+    /// @dev `keccak256("FreeReroll(uint256[] tokenIds,uint256 deadline)")`.
     bytes32 private constant _FREE_REROLL_TYPEHASH =
-        0x5a781c0332c2b7e3b5af87f97204f9d94e66671cf0d9d1d9e7605f4429e12893;
+        0x1666099804f525033095653463cd5e7eeff3d90126c9548616b633d1f3e874d0;
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
     /*                          STORAGE                           */
@@ -62,6 +63,9 @@ contract Sheepy404 is DN404, SheepyBase, EIP712 {
 
     /// @dev How much native currency required to reroll a token.
     uint256 public rerollPrice;
+
+    /// @dev Whether a certain `salt` has been used.
+    mapping(bytes32 => bool) public usedSignatures;
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
     /*                        INITIALIZER                         */
@@ -135,9 +139,12 @@ contract Sheepy404 is DN404, SheepyBase, EIP712 {
         }
     }
 
-    function freeReveal(uint256[] memory tokenIds, bytes memory signature) public {
+    function freeReveal(uint256[] memory tokenIds, uint256 deadline, bytes memory signature)
+        public
+    {
         // Check if signer has admin role
-        bytes32 hash = _hashTypedData(keccak256(abi.encode(_FREE_REVEAL_TYPEHASH, tokenIds)));
+        bytes32 hash =
+            _hashTypedData(keccak256(abi.encode(_FREE_REVEAL_TYPEHASH, tokenIds, deadline)));
         bytes32 r;
         bytes32 s;
         uint8 v;
@@ -148,6 +155,10 @@ contract Sheepy404 is DN404, SheepyBase, EIP712 {
         }
         address signer = ecrecover(hash, v, r, s);
         require(hasRole(signer, ADMIN_ROLE), "Unauthorized.");
+        require(block.timestamp <= deadline, "Signature expired.");
+        bytes32 sigHash = ECDSA.canonicalHash(signature);
+        require(!usedSignatures[sigHash], "Signature already used.");
+        usedSignatures[sigHash] = true;
         for (uint256 i; i < tokenIds.length; ++i) {
             uint256 id = tokenIds.get(i);
             require(_callerIsAuthorizedFor(id), "Unauthorized.");
@@ -158,9 +169,12 @@ contract Sheepy404 is DN404, SheepyBase, EIP712 {
     }
 
     /// require a signature from the owner to reroll
-    function freeReroll(uint256[] memory tokenIds, bytes memory signature) public {
+    function freeReroll(uint256[] memory tokenIds, uint256 deadline, bytes memory signature)
+        public
+    {
         // Check if signer has admin role
-        bytes32 hash = _hashTypedData(keccak256(abi.encode(_FREE_REROLL_TYPEHASH, tokenIds)));
+        bytes32 hash =
+            _hashTypedData(keccak256(abi.encode(_FREE_REROLL_TYPEHASH, tokenIds, deadline)));
         bytes32 r;
         bytes32 s;
         uint8 v;
@@ -171,6 +185,10 @@ contract Sheepy404 is DN404, SheepyBase, EIP712 {
         }
         address signer = ecrecover(hash, v, r, s);
         require(hasRole(signer, ADMIN_ROLE), "Unauthorized.");
+        require(block.timestamp <= deadline, "Signature expired.");
+        bytes32 sigHash = ECDSA.canonicalHash(signature);
+        require(!usedSignatures[sigHash], "Signature already used.");
+        usedSignatures[sigHash] = true;
         for (uint256 i; i < tokenIds.length; ++i) {
             uint256 id = tokenIds.get(i);
             require(_callerIsAuthorizedFor(id), "Unauthorized.");

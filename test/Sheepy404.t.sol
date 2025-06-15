@@ -41,9 +41,9 @@ contract Sheepy404Test is Test {
     string internal constant _NOT_SO_SECRET = "SomethingSomethingNoGrief";
 
     bytes32 private constant _FREE_REVEAL_TYPEHASH =
-        0x1b1611af788723511f281de0f21fe4152038dc00a223c33af7214129add904b7;
+        0x131842ed0075e1b61a69a5a4ee3616ded1e423caf2e195e874bafa82bff79a2e;
     bytes32 private constant _FREE_REROLL_TYPEHASH =
-        0x5a781c0332c2b7e3b5af87f97204f9d94e66671cf0d9d1d9e7605f4429e12893;
+        0x1666099804f525033095653463cd5e7eeff3d90126c9548616b633d1f3e874d0;
 
     function setUp() public {
         sheepy = new Sheepy404();
@@ -166,12 +166,14 @@ contract Sheepy404Test is Test {
         assertEq(mirror.ownerOf(1), _BOB, "Token 1 should be owned by BOB");
         assertEq(mirror.ownerOf(2), _BOB, "Token 2 should be owned by BOB");
 
-        // Create signature for tokenIds [1,2]
+        // Create signature for tokenIds [1,2] with deadline
         uint256[] memory tokenIds = DynamicArrayLib.malloc(2);
         tokenIds[0] = 1;
         tokenIds[1] = 2;
-        // EIP-712 struct hash: keccak256(abi.encode(_FREE_REROLL_TYPEHASH, tokenIds))
-        bytes32 structHash = keccak256(abi.encode(_FREE_REROLL_TYPEHASH, tokenIds));
+        uint256 deadline = block.timestamp + 1 hours;
+
+        // EIP-712 struct hash: keccak256(abi.encode(_FREE_REROLL_TYPEHASH, tokenIds, deadline))
+        bytes32 structHash = keccak256(abi.encode(_FREE_REROLL_TYPEHASH, tokenIds, deadline));
         // EIP-712 domain separator: use sheepy.DOMAIN_SEPARATOR()
         bytes32 domainSeparator = sheepy.DOMAIN_SEPARATOR();
         // EIP-712 digest: keccak256("\x19\x01" || domainSeparator || structHash)
@@ -186,15 +188,25 @@ contract Sheepy404Test is Test {
         vm.expectEmit();
         emit Reroll(2);
         vm.prank(_BOB);
-        sheepy.freeReroll(tokenIds, signature);
+        sheepy.freeReroll(tokenIds, deadline, signature);
+
+        // Test signature reuse (should fail)
+        vm.prank(_BOB);
+        vm.expectRevert("Signature already used.");
+        sheepy.freeReroll(tokenIds, deadline, signature);
 
         // Test unauthorized signature
         // Sign with CHARLIE's private key (who doesn't have admin role)
+        vm.warp(block.timestamp + 1 hours);
+        uint256 newDeadline = block.timestamp + 1 hours;
+        structHash = keccak256(abi.encode(_FREE_REROLL_TYPEHASH, tokenIds, newDeadline));
+        digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
         (v, r, s) = vm.sign(0x333, digest);
-        signature = abi.encodePacked(r, s, v);
+        bytes memory unauthorizedSignature = abi.encodePacked(r, s, v);
+
         vm.prank(_BOB);
         vm.expectRevert("Unauthorized.");
-        sheepy.freeReroll(tokenIds, signature);
+        sheepy.freeReroll(tokenIds, newDeadline, unauthorizedSignature);
 
         // Test unauthorized caller
         // Transfer token 1 to CHARLIE
@@ -202,29 +214,33 @@ contract Sheepy404Test is Test {
         mirror.transferFrom(_BOB, _CHARLIE, 1);
         assertEq(mirror.ownerOf(1), _CHARLIE, "Token 1 should be owned by CHARLIE");
 
-        // Sign with BOB's private key (admin)
+        // Sign with BOB's private key (admin) for new deadline
+        newDeadline = block.timestamp + 1 hours;
+        structHash = keccak256(abi.encode(_FREE_REROLL_TYPEHASH, tokenIds, newDeadline));
+        digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
         (v, r, s) = vm.sign(_BOB_PRIVATE_KEY, digest);
-        signature = abi.encodePacked(r, s, v);
+        bytes memory newSignature = abi.encodePacked(r, s, v);
 
         // Try to reroll with CHARLIE's token using BOB's signature
         vm.prank(_CHARLIE);
         vm.expectRevert("Unauthorized.");
-        sheepy.freeReroll(tokenIds, signature);
+        sheepy.freeReroll(tokenIds, newDeadline, newSignature);
 
         // Test invalid signature format
         bytes memory invalidSignature = abi.encodePacked(r, s); // Missing v
         vm.prank(_BOB);
         vm.expectRevert();
-        sheepy.freeReroll(tokenIds, invalidSignature);
+        sheepy.freeReroll(tokenIds, newDeadline, invalidSignature);
 
         // Test empty tokenIds array
         uint256[] memory emptyTokenIds = DynamicArrayLib.malloc(0);
-        structHash = keccak256(abi.encode(_FREE_REROLL_TYPEHASH, emptyTokenIds));
+        newDeadline = block.timestamp + 1 hours;
+        structHash = keccak256(abi.encode(_FREE_REROLL_TYPEHASH, emptyTokenIds, newDeadline));
         digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
         (v, r, s) = vm.sign(_BOB_PRIVATE_KEY, digest);
-        signature = abi.encodePacked(r, s, v);
+        bytes memory emptySignature = abi.encodePacked(r, s, v);
         vm.prank(_BOB);
-        sheepy.freeReroll(emptyTokenIds, signature); // Should succeed but emit no events
+        sheepy.freeReroll(emptyTokenIds, newDeadline, emptySignature); // Should succeed but emit no events
     }
 
     function testFreeReveal() public {
@@ -237,12 +253,14 @@ contract Sheepy404Test is Test {
         assertEq(mirror.ownerOf(1), _BOB, "Token 1 should be owned by BOB");
         assertEq(mirror.ownerOf(2), _BOB, "Token 2 should be owned by BOB");
 
-        // Create signature for tokenIds [1,2]
+        // Create signature for tokenIds [1,2] with deadline
         uint256[] memory tokenIds = DynamicArrayLib.malloc(2);
         tokenIds[0] = 1;
         tokenIds[1] = 2;
-        // EIP-712 struct hash: keccak256(abi.encode(_FREE_REVEAL_TYPEHASH, tokenIds))
-        bytes32 structHash = keccak256(abi.encode(_FREE_REVEAL_TYPEHASH, tokenIds));
+        uint256 deadline = block.timestamp + 1 hours;
+
+        // EIP-712 struct hash: keccak256(abi.encode(_FREE_REVEAL_TYPEHASH, tokenIds, deadline))
+        bytes32 structHash = keccak256(abi.encode(_FREE_REVEAL_TYPEHASH, tokenIds, deadline));
         // EIP-712 domain separator: use sheepy.DOMAIN_SEPARATOR()
         bytes32 domainSeparator = sheepy.DOMAIN_SEPARATOR();
         // EIP-712 digest: keccak256("\x19\x01" || domainSeparator || structHash)
@@ -257,17 +275,27 @@ contract Sheepy404Test is Test {
         vm.expectEmit();
         emit Reveal(2);
         vm.prank(_BOB);
-        sheepy.freeReveal(tokenIds, signature);
+        sheepy.freeReveal(tokenIds, deadline, signature);
         assertEq(_revealed(1), true, "Token 1 should be revealed");
         assertEq(_revealed(2), true, "Token 2 should be revealed");
 
+        // Test signature reuse (should fail)
+        vm.prank(_BOB);
+        vm.expectRevert("Signature already used.");
+        sheepy.freeReveal(tokenIds, deadline, signature);
+
         // Test unauthorized signature
         // Sign with CHARLIE's private key (who doesn't have admin role)
+        vm.warp(block.timestamp + 1 hours);
+        uint256 newDeadline = block.timestamp + 1 hours;
+        structHash = keccak256(abi.encode(_FREE_REVEAL_TYPEHASH, tokenIds, newDeadline));
+        digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
         (v, r, s) = vm.sign(0x333, digest);
-        signature = abi.encodePacked(r, s, v);
+        bytes memory unauthorizedSignature = abi.encodePacked(r, s, v);
+
         vm.prank(_BOB);
         vm.expectRevert("Unauthorized.");
-        sheepy.freeReveal(tokenIds, signature);
+        sheepy.freeReveal(tokenIds, newDeadline, unauthorizedSignature);
 
         // Test unauthorized caller
         // Transfer token 1 to CHARLIE
@@ -275,29 +303,33 @@ contract Sheepy404Test is Test {
         mirror.transferFrom(_BOB, _CHARLIE, 1);
         assertEq(mirror.ownerOf(1), _CHARLIE, "Token 1 should be owned by CHARLIE");
 
-        // Sign with BOB's private key (admin)
+        // Sign with BOB's private key (admin) for new deadline
+        newDeadline = block.timestamp + 1 hours;
+        structHash = keccak256(abi.encode(_FREE_REVEAL_TYPEHASH, tokenIds, newDeadline));
+        digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
         (v, r, s) = vm.sign(_BOB_PRIVATE_KEY, digest);
-        signature = abi.encodePacked(r, s, v);
+        bytes memory newSignature = abi.encodePacked(r, s, v);
 
         // Try to reveal with CHARLIE's token using BOB's signature
         vm.prank(_CHARLIE);
         vm.expectRevert("Unauthorized.");
-        sheepy.freeReveal(tokenIds, signature);
+        sheepy.freeReveal(tokenIds, newDeadline, newSignature);
 
         // Test invalid signature format
         bytes memory invalidSignature = abi.encodePacked(r, s); // Missing v
         vm.prank(_BOB);
         vm.expectRevert();
-        sheepy.freeReveal(tokenIds, invalidSignature);
+        sheepy.freeReveal(tokenIds, newDeadline, invalidSignature);
 
         // Test empty tokenIds array
         uint256[] memory emptyTokenIds = DynamicArrayLib.malloc(0);
-        structHash = keccak256(abi.encode(_FREE_REVEAL_TYPEHASH, emptyTokenIds));
+        newDeadline = block.timestamp + 1 hours;
+        structHash = keccak256(abi.encode(_FREE_REVEAL_TYPEHASH, emptyTokenIds, newDeadline));
         digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
         (v, r, s) = vm.sign(_BOB_PRIVATE_KEY, digest);
-        signature = abi.encodePacked(r, s, v);
+        bytes memory emptySignature = abi.encodePacked(r, s, v);
         vm.prank(_BOB);
-        sheepy.freeReveal(emptyTokenIds, signature); // Should succeed but emit no events
+        sheepy.freeReveal(emptyTokenIds, newDeadline, emptySignature); // Should succeed but emit no events
     }
 
     function testSetAssetCount() public {
@@ -586,6 +618,103 @@ contract Sheepy404Test is Test {
         vm.prank(_CHARLIE);
         vm.expectRevert("Not open.");
         sale.buy(1, _CHARLIE, claimAmount, customQuota, signature);
+    }
+
+    function testSignatureReplayProtection() public {
+        _initialize();
+
+        // Transfer some tokens to BOB
+        vm.prank(_ALICE);
+        sheepy.transfer(_BOB, _UNIT * 3);
+
+        uint256[] memory tokenIds = DynamicArrayLib.malloc(3);
+        tokenIds[0] = 1;
+        tokenIds[1] = 2;
+        tokenIds[2] = 3;
+        uint256 deadline = block.timestamp + 1 hours;
+
+        // Test that same signature can't be used for both reveal and reroll
+        bytes32 revealStructHash = keccak256(abi.encode(_FREE_REVEAL_TYPEHASH, tokenIds, deadline));
+        bytes32 rerollStructHash = keccak256(abi.encode(_FREE_REROLL_TYPEHASH, tokenIds, deadline));
+        bytes32 domainSeparator = sheepy.DOMAIN_SEPARATOR();
+
+        bytes32 revealDigest =
+            keccak256(abi.encodePacked("\x19\x01", domainSeparator, revealStructHash));
+        bytes32 rerollDigest =
+            keccak256(abi.encodePacked("\x19\x01", domainSeparator, rerollStructHash));
+
+        bytes memory revealSignature;
+        bytes memory rerollSignature;
+        {
+            (uint8 v1, bytes32 r1, bytes32 s1) = vm.sign(_BOB_PRIVATE_KEY, revealDigest);
+            (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(_BOB_PRIVATE_KEY, rerollDigest);
+            revealSignature = abi.encodePacked(r1, s1, v1);
+            rerollSignature = abi.encodePacked(r2, s2, v2);
+        }
+
+        // Use reveal signature
+        vm.prank(_BOB);
+        sheepy.freeReveal(tokenIds, deadline, revealSignature);
+
+        // Use reroll signature (should work because it's different)
+        vm.prank(_BOB);
+        sheepy.freeReroll(tokenIds, deadline, rerollSignature);
+
+        // Try to reuse reveal signature (should fail)
+        vm.prank(_BOB);
+        vm.expectRevert("Signature already used.");
+        sheepy.freeReveal(tokenIds, deadline, revealSignature);
+
+        // Try to reuse reroll signature (should fail)
+        vm.prank(_BOB);
+        vm.expectRevert("Signature already used.");
+        sheepy.freeReroll(tokenIds, deadline, rerollSignature);
+    }
+
+    function testDeadlineExpiration() public {
+        _initialize();
+
+        // Transfer some tokens to BOB
+        vm.prank(_ALICE);
+        sheepy.transfer(_BOB, _UNIT * 2);
+
+        uint256[] memory tokenIds = DynamicArrayLib.malloc(2);
+        tokenIds[0] = 1;
+        tokenIds[1] = 2;
+
+        // Test reveal with future deadline (should work)
+        uint256 futureDeadline = block.timestamp + 1 hours;
+        bytes32 structHash = keccak256(abi.encode(_FREE_REVEAL_TYPEHASH, tokenIds, futureDeadline));
+        bytes32 domainSeparator = sheepy.DOMAIN_SEPARATOR();
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(_BOB_PRIVATE_KEY, digest);
+        bytes memory signature = abi.encodePacked(r, s, v);
+
+        vm.prank(_BOB);
+        sheepy.freeReveal(tokenIds, futureDeadline, signature);
+
+        // Test reroll with current timestamp as deadline (should work)
+        uint256 currentDeadline = block.timestamp;
+        structHash = keccak256(abi.encode(_FREE_REROLL_TYPEHASH, tokenIds, currentDeadline));
+        digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
+        (v, r, s) = vm.sign(_BOB_PRIVATE_KEY, digest);
+        signature = abi.encodePacked(r, s, v);
+
+        vm.prank(_BOB);
+        sheepy.freeReroll(tokenIds, currentDeadline, signature);
+
+        // Advance time and test expired deadline
+        vm.warp(block.timestamp + 2 hours);
+
+        uint256 expiredDeadline = block.timestamp - 1 hours;
+        structHash = keccak256(abi.encode(_FREE_REVEAL_TYPEHASH, tokenIds, expiredDeadline));
+        digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
+        (v, r, s) = vm.sign(_BOB_PRIVATE_KEY, digest);
+        signature = abi.encodePacked(r, s, v);
+
+        vm.prank(_BOB);
+        vm.expectRevert("Signature expired.");
+        sheepy.freeReveal(tokenIds, expiredDeadline, signature);
     }
 
     function testAirdropWithCustomQuota() public {
