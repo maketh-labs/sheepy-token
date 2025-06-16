@@ -6,9 +6,11 @@ import {DN404} from "dn404/src/DN404.sol";
 import {LibString} from "solady/utils/LibString.sol";
 import {LibBitmap} from "solady/utils/LibBitmap.sol";
 import {DynamicArrayLib} from "solady/utils/DynamicArrayLib.sol";
+import {EIP712} from "solady/utils/EIP712.sol";
+import {ECDSA} from "solady/utils/ECDSA.sol";
 
 /// @dev This contract can be used by itself or as a proxy's implementation.
-contract Sheepy404 is DN404, SheepyBase {
+contract Sheepy404 is DN404, SheepyBase, EIP712 {
     using LibBitmap for *;
     using DynamicArrayLib for *;
 
@@ -27,6 +29,18 @@ contract Sheepy404 is DN404, SheepyBase {
 
     /// @dev Emitted when asset count is set.
     event AssetCount(uint256 newAssetCount);
+
+    /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
+    /*                         CONSTANTS                          */
+    /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
+
+    /// @dev `keccak256("FreeReveal(uint256[] tokenIds,uint256 deadline)")`.
+    bytes32 private constant _FREE_REVEAL_TYPEHASH =
+        0x131842ed0075e1b61a69a5a4ee3616ded1e423caf2e195e874bafa82bff79a2e;
+
+    /// @dev `keccak256("FreeReroll(uint256[] tokenIds,uint256 deadline)")`.
+    bytes32 private constant _FREE_REROLL_TYPEHASH =
+        0x1666099804f525033095653463cd5e7eeff3d90126c9548616b633d1f3e874d0;
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
     /*                          STORAGE                           */
@@ -49,6 +63,9 @@ contract Sheepy404 is DN404, SheepyBase {
 
     /// @dev How much native currency required to reroll a token.
     uint256 public rerollPrice;
+
+    /// @dev Whether a certain `salt` has been used.
+    mapping(bytes32 => bool) public usedSignatures;
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
     /*                        INITIALIZER                         */
@@ -89,6 +106,11 @@ contract Sheepy404 is DN404, SheepyBase {
         }
     }
 
+    /// @dev Returns the domain separator for EIP-712 typed data signing.
+    function DOMAIN_SEPARATOR() external view returns (bytes32 result) {
+        return _domainSeparator();
+    }
+
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
     /*                       REVEAL & REROLL                      */
     /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
@@ -118,9 +140,12 @@ contract Sheepy404 is DN404, SheepyBase {
         }
     }
 
-    function freeReveal(uint256[] memory tokenIds, bytes memory signature) public {
+    function freeReveal(uint256[] memory tokenIds, uint256 deadline, bytes memory signature)
+        public
+    {
         // Check if signer has admin role
-        bytes32 hash = keccak256(abi.encode(tokenIds));
+        bytes32 hash =
+            _hashTypedData(keccak256(abi.encode(_FREE_REVEAL_TYPEHASH, tokenIds, deadline)));
         bytes32 r;
         bytes32 s;
         uint8 v;
@@ -131,6 +156,10 @@ contract Sheepy404 is DN404, SheepyBase {
         }
         address signer = ecrecover(hash, v, r, s);
         require(hasRole(signer, ADMIN_ROLE), "Unauthorized.");
+        require(block.timestamp <= deadline, "Signature expired.");
+        bytes32 sigHash = ECDSA.canonicalHash(signature);
+        require(!usedSignatures[sigHash], "Signature already used.");
+        usedSignatures[sigHash] = true;
         for (uint256 i; i < tokenIds.length; ++i) {
             uint256 id = tokenIds.get(i);
             require(_callerIsAuthorizedFor(id), "Unauthorized.");
@@ -141,9 +170,12 @@ contract Sheepy404 is DN404, SheepyBase {
     }
 
     /// require a signature from the owner to reroll
-    function freeReroll(uint256[] memory tokenIds, bytes memory signature) public {
+    function freeReroll(uint256[] memory tokenIds, uint256 deadline, bytes memory signature)
+        public
+    {
         // Check if signer has admin role
-        bytes32 hash = keccak256(abi.encode(tokenIds));
+        bytes32 hash =
+            _hashTypedData(keccak256(abi.encode(_FREE_REROLL_TYPEHASH, tokenIds, deadline)));
         bytes32 r;
         bytes32 s;
         uint8 v;
@@ -154,6 +186,10 @@ contract Sheepy404 is DN404, SheepyBase {
         }
         address signer = ecrecover(hash, v, r, s);
         require(hasRole(signer, ADMIN_ROLE), "Unauthorized.");
+        require(block.timestamp <= deadline, "Signature expired.");
+        bytes32 sigHash = ECDSA.canonicalHash(signature);
+        require(!usedSignatures[sigHash], "Signature already used.");
+        usedSignatures[sigHash] = true;
         for (uint256 i; i < tokenIds.length; ++i) {
             uint256 id = tokenIds.get(i);
             require(_callerIsAuthorizedFor(id), "Unauthorized.");
@@ -286,5 +322,15 @@ contract Sheepy404 is DN404, SheepyBase {
     /// @dev 1m full ERC20 tokens for 1 ERC721 NFT.
     function _unit() internal view virtual override returns (uint256) {
         return 1_000_000 * 10 ** 18;
+    }
+
+    /// @dev Returns the name and version of the contract. Override from EIP712.
+    function _domainNameAndVersion()
+        internal
+        pure
+        override
+        returns (string memory, string memory)
+    {
+        return ("Sheepy404", "1");
     }
 }
