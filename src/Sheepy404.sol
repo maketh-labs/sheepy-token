@@ -343,7 +343,7 @@ contract Sheepy404 is DN404, SheepyBase, EIP712 {
         result = flags & _ADDRESS_DATA_SKIP_NFT_FLAG != 0;
         if (flags & _ADDRESS_DATA_SKIP_NFT_INITIALIZED_FLAG == uint256(0)) {
             if (_skipNFTDefault() == SkipNFTDefault.HasCode) {
-                if (LibAGW.isAGWContract(owner)) return true;
+                if (LibAGW.isAGWContract(owner)) return false;
 
                 /// @solidity memory-safe-assembly
                 assembly {

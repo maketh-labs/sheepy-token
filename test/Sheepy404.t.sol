@@ -163,6 +163,37 @@ contract Sheepy404Test is Test {
         assertEq(mirror.ownerOf(1), _BOB);
     }
 
+    function testTransferToAGW() public {
+        _initialize();
+
+        vm.mockCall(
+            0xd5E3efDA6bB5aB545cc2358796E96D9033496Dda,
+            abi.encodeWithSignature("isAGW(address)", address(this)),
+            abi.encode(true)
+        );
+
+        vm.expectEmit();
+        emit Reset(1);
+        vm.prank(_ALICE);
+        sheepy.transfer(address(this), _UNIT); // address(this) has code
+        assertEq(mirror.balanceOf(address(this)), 1);
+        assertEq(sheepy.balanceOf(address(this)), _UNIT);
+        assertEq(mirror.totalSupply(), 1);
+        assertEq(mirror.ownerOf(1), address(this));
+
+        vm.mockCall(
+            0xd5E3efDA6bB5aB545cc2358796E96D9033496Dda,
+            abi.encodeWithSignature("isAGW(address)", address(this)),
+            abi.encode(false)
+        );
+
+        vm.prank(_ALICE);
+        sheepy.transfer(address(this), _UNIT);
+        assertEq(mirror.ownerOf(1), address(this));
+        assertEq(sheepy.balanceOf(address(this)), _UNIT * 2);
+        assertEq(mirror.totalSupply(), 1); // NFT does not mint
+    }
+
     function testFreeReroll() public {
         _initialize();
 
