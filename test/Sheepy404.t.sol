@@ -107,9 +107,9 @@ contract Sheepy404Test is Test {
 
         SheepySale.SaleConfig memory c;
         c.erc20ToSell = address(sheepy);
-        c.price = 0.03 ether;
         c.startTime = 1;
         c.endTime = 10000;
+        c.price = uint96(0.03 ether);
         c.totalQuota = 10;
         c.addressQuota = 2;
 
@@ -118,8 +118,8 @@ contract Sheepy404Test is Test {
     }
 
     function testSalePriceOf() public view {
-        uint256 amount = _WAD / 50;
-        uint256 pricePerWad = 0.03 ether;
+        uint96 amount = uint96(_WAD / 50);
+        uint96 pricePerWad = uint96(0.03 ether);
         uint256 totalPrice = sale.priceOf(address(sheepy), amount, pricePerWad);
         assertEq(totalPrice, (10 ** 18 / 50) * 0.03 ether / 10 ** 18);
     }
@@ -485,9 +485,9 @@ contract Sheepy404Test is Test {
         c.erc20ToSell = address(sheepy);
         c.price = 0; // Free airdrop
         c.startTime = 1;
-        c.endTime = block.timestamp + 1000;
-        c.totalQuota = 1000 * _WAD;
-        c.addressQuota = 100 * _WAD;
+        c.endTime = uint40(block.timestamp + 1000);
+        c.totalQuota = uint96(1000 * _WAD);
+        c.addressQuota = uint96(100 * _WAD);
         c.signer = _BOB; // BOB will sign the claims
 
         vm.prank(_ALICE);
@@ -498,8 +498,8 @@ contract Sheepy404Test is Test {
         sheepy.transfer(address(sale), 1000 * _WAD);
 
         // Create signature for CHARLIE to claim 50 tokens
-        uint256 claimAmount = 50 * _WAD;
-        uint256 customQuota = 100 * _WAD;
+        uint96 claimAmount = uint96(50 * _WAD);
+        uint96 customQuota = uint96(100 * _WAD);
         bytes32 hash = keccak256("SheepySale");
         hash = keccak256(abi.encode(hash, uint256(1), _CHARLIE, customQuota));
         hash = hash.toEthSignedMessageHash();
@@ -533,9 +533,9 @@ contract Sheepy404Test is Test {
         c.erc20ToSell = address(sheepy);
         c.price = 0;
         c.startTime = 1;
-        c.endTime = block.timestamp + 1000;
-        c.totalQuota = 1000 * _WAD;
-        c.addressQuota = 100 * _WAD;
+        c.endTime = uint40(block.timestamp + 1000);
+        c.totalQuota = uint96(1000 * _WAD);
+        c.addressQuota = uint96(100 * _WAD);
         c.signer = _BOB;
 
         vm.prank(_ALICE);
@@ -544,8 +544,8 @@ contract Sheepy404Test is Test {
         vm.prank(_ALICE);
         sheepy.transfer(address(sale), 1000 * _WAD);
 
-        uint256 claimAmount = 50 * _WAD;
-        uint256 customQuota = 100 * _WAD;
+        uint96 claimAmount = uint96(50 * _WAD);
+        uint96 customQuota = uint96(100 * _WAD);
 
         // Test with wrong signer (CHARLIE instead of BOB)
         bytes32 hash = keccak256("SheepySale");
@@ -578,9 +578,9 @@ contract Sheepy404Test is Test {
         c.erc20ToSell = address(sheepy);
         c.price = 0;
         c.startTime = 1;
-        c.endTime = block.timestamp + 1000;
-        c.totalQuota = 150 * _WAD; // Total quota smaller than address quota
-        c.addressQuota = 200 * _WAD;
+        c.endTime = uint40(block.timestamp + 1000);
+        c.totalQuota = uint96(150 * _WAD); // Total quota smaller than address quota
+        c.addressQuota = uint96(200 * _WAD);
         c.signer = _BOB;
 
         vm.prank(_ALICE);
@@ -589,8 +589,8 @@ contract Sheepy404Test is Test {
         vm.prank(_ALICE);
         sheepy.transfer(address(sale), 1000 * _WAD);
 
-        uint256 claimAmount = 100 * _WAD;
-        uint256 customQuota = 200 * _WAD;
+        uint96 claimAmount = uint96(100 * _WAD);
+        uint96 customQuota = uint96(200 * _WAD);
 
         // CHARLIE claims first
         bytes32 hash = keccak256("SheepySale");
@@ -621,10 +621,10 @@ contract Sheepy404Test is Test {
         SheepySale.SaleConfig memory c;
         c.erc20ToSell = address(sheepy);
         c.price = 0;
-        c.startTime = block.timestamp + 100;
-        c.endTime = block.timestamp + 200;
-        c.totalQuota = 1000 * _WAD;
-        c.addressQuota = 100 * _WAD;
+        c.startTime = uint40(block.timestamp + 100);
+        c.endTime = uint40(block.timestamp + 200);
+        c.totalQuota = uint96(1000 * _WAD);
+        c.addressQuota = uint96(100 * _WAD);
         c.signer = _BOB;
 
         vm.prank(_ALICE);
@@ -633,8 +633,8 @@ contract Sheepy404Test is Test {
         vm.prank(_ALICE);
         sheepy.transfer(address(sale), 1000 * _WAD);
 
-        uint256 claimAmount = 50 * _WAD;
-        uint256 customQuota = 100 * _WAD;
+        uint96 claimAmount = uint96(50 * _WAD);
+        uint96 customQuota = uint96(100 * _WAD);
         bytes32 hash = keccak256("SheepySale");
         hash = keccak256(abi.encode(hash, uint256(1), _CHARLIE, customQuota));
         hash = hash.toEthSignedMessageHash();
@@ -764,9 +764,9 @@ contract Sheepy404Test is Test {
         c.erc20ToSell = address(sheepy);
         c.price = 0;
         c.startTime = 1;
-        c.endTime = block.timestamp + 1000;
-        c.totalQuota = 1000 * _WAD;
-        c.addressQuota = 50 * _WAD; // Default quota is 50
+        c.endTime = uint40(block.timestamp + 1000);
+        c.totalQuota = uint96(1000 * _WAD);
+        c.addressQuota = uint96(50 * _WAD); // Default quota is 50
         c.signer = _BOB;
 
         vm.prank(_ALICE);
@@ -777,7 +777,7 @@ contract Sheepy404Test is Test {
 
         // CHARLIE gets custom quota of 100 (higher than default)
         // But effective quota is min(100, 50) = 50
-        uint256 charlieCustomQuota = 100 * _WAD;
+        uint96 charlieCustomQuota = uint96(100 * _WAD);
         bytes32 hash = keccak256("SheepySale");
         hash = keccak256(abi.encode(hash, uint256(1), _CHARLIE, charlieCustomQuota));
         hash = hash.toEthSignedMessageHash();
@@ -786,17 +786,17 @@ contract Sheepy404Test is Test {
 
         // Should succeed because claim amount (45) is within effective quota of min(100, 50) = 50
         vm.prank(_CHARLIE);
-        sale.buy(1, _CHARLIE, 45 * _WAD, charlieCustomQuota, charlieSignature);
+        sale.buy(1, _CHARLIE, uint96(45 * _WAD), charlieCustomQuota, charlieSignature);
         assertEq(sheepy.balanceOf(_CHARLIE), 45 * _WAD);
 
         // CHARLIE tries to claim 10 more (total would be 55), should fail because effective quota is 50
         vm.prank(_CHARLIE);
         vm.expectRevert(SheepySale.ExceededAddressQuota.selector);
-        sale.buy(1, _CHARLIE, 10 * _WAD, charlieCustomQuota, charlieSignature);
+        sale.buy(1, _CHARLIE, uint96(10 * _WAD), charlieCustomQuota, charlieSignature);
 
         // DAVID gets custom quota of 30 (lower than default)
         // Effective quota is min(30, 50) = 30
-        uint256 davidCustomQuota = 30 * _WAD;
+        uint96 davidCustomQuota = uint96(30 * _WAD);
         hash = keccak256("SheepySale");
         hash = keccak256(abi.encode(hash, uint256(1), _DAVID, davidCustomQuota));
         hash = hash.toEthSignedMessageHash();
@@ -805,12 +805,12 @@ contract Sheepy404Test is Test {
 
         // Should succeed when claiming within custom quota (30)
         vm.prank(_DAVID);
-        sale.buy(1, _DAVID, 25 * _WAD, davidCustomQuota, davidSignature);
+        sale.buy(1, _DAVID, uint96(25 * _WAD), davidCustomQuota, davidSignature);
         assertEq(sheepy.balanceOf(_DAVID), 25 * _WAD);
 
         // DAVID tries to claim 10 more (total would be 35), should fail because custom quota is 30
         vm.prank(_DAVID);
         vm.expectRevert(SheepySale.ExceededAddressQuota.selector);
-        sale.buy(1, _DAVID, 10 * _WAD, davidCustomQuota, davidSignature);
+        sale.buy(1, _DAVID, uint96(10 * _WAD), davidCustomQuota, davidSignature);
     }
 }

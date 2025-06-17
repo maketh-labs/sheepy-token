@@ -43,17 +43,17 @@ contract SheepySale is SheepyBase {
     struct SaleConfig {
         // The address of the ERC20 to sell.
         address erc20ToSell;
+        // The sale start timestamp.
+        uint40 startTime;
+        // The sale end timestamp.
+        uint40 endTime;
         // Amount of Ether in wei, per `10 ** erc20ToSell.decimals()` ERC20 in wei.
         // `decimals` is usually 18 by default.
-        uint256 price;
-        // The sale start timestamp.
-        uint256 startTime;
-        // The sale end timestamp.
-        uint256 endTime;
+        uint96 price;
         // The maximum amount in wei that can be bought.
-        uint256 totalQuota;
+        uint96 totalQuota;
         // The maximum amount in wei that can be bought per-address.
-        uint256 addressQuota;
+        uint96 addressQuota;
         // Leave as `address(0)` if no WL required.
         // If WL is required, the hash to be signed is:
         // `keccak256(abi.encode(keccak256("SheepySale"), saleId, msg.sender, customAddressQuota))`.
@@ -63,12 +63,12 @@ contract SheepySale is SheepyBase {
     /// @dev Holds the information for a sale.
     struct SaleInfo {
         address erc20ToSell;
-        uint256 price;
-        uint256 startTime;
-        uint256 endTime;
-        uint256 totalQuota;
-        uint256 addressQuota;
-        uint256 totalBought;
+        uint40 startTime;
+        uint40 endTime;
+        uint96 price;
+        uint96 totalQuota;
+        uint96 addressQuota;
+        uint96 totalBought;
         address signer;
     }
 
@@ -77,7 +77,7 @@ contract SheepySale is SheepyBase {
     /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
 
     /// @dev Emitted for a purchase.
-    event Bought(address by, address to, address erc20ToSell, uint256 price, uint256 amount);
+    event Bought(address by, address to, address erc20ToSell, uint96 price, uint96 amount);
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
     /*                          STORAGE                           */
@@ -86,12 +86,12 @@ contract SheepySale is SheepyBase {
     /// @dev Sale storage.
     struct Sale {
         address erc20ToSell;
-        uint256 price;
-        uint256 startTime;
-        uint256 endTime;
-        uint256 totalQuota;
-        uint256 addressQuota;
-        uint256 totalBought;
+        uint40 startTime;
+        uint40 endTime;
+        uint96 price;
+        uint96 totalQuota;
+        uint96 addressQuota;
+        uint96 totalBought;
         address signer;
         mapping(address => uint256) bought;
     }
@@ -120,8 +120,8 @@ contract SheepySale is SheepyBase {
     function buy(
         uint256 saleId,
         address to,
-        uint256 amount,
-        uint256 customAddressQuota,
+        uint96 amount,
+        uint96 customAddressQuota,
         bytes calldata signature
     ) public payable {
         if (amount == 0) revert AmountZero();
@@ -144,7 +144,7 @@ contract SheepySale is SheepyBase {
     }
 
     /// @dev Returns the amount of native currency required for payment.
-    function priceOf(address erc20, uint256 amount, uint256 price) public view returns (uint256) {
+    function priceOf(address erc20, uint96 amount, uint96 price) public view returns (uint256) {
         uint256 decimals = MetadataReaderLib.readDecimals(erc20, type(uint256).max);
         return FixedPointMathLib.fullMulDivUp(amount, price, 10 ** decimals);
     }
@@ -157,9 +157,9 @@ contract SheepySale is SheepyBase {
     function saleInfo(uint256 saleId) public view returns (SaleInfo memory info) {
         Sale storage s = _sales[saleId];
         info.erc20ToSell = s.erc20ToSell;
-        info.price = s.price;
         info.startTime = s.startTime;
         info.endTime = s.endTime;
+        info.price = s.price;
         info.totalQuota = s.totalQuota;
         info.addressQuota = s.addressQuota;
         info.signer = s.signer;
@@ -179,9 +179,9 @@ contract SheepySale is SheepyBase {
     function setSale(uint256 saleId, SaleConfig calldata c) public onlyOwnerOrRole(ADMIN_ROLE) {
         Sale storage s = _sales[saleId];
         s.erc20ToSell = c.erc20ToSell;
-        s.price = c.price;
         s.startTime = c.startTime;
         s.endTime = c.endTime;
+        s.price = c.price;
         s.totalQuota = c.totalQuota;
         s.addressQuota = c.addressQuota;
         s.signer = c.signer;
