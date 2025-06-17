@@ -8,6 +8,7 @@ import {LibBitmap} from "solady/utils/LibBitmap.sol";
 import {DynamicArrayLib} from "solady/utils/DynamicArrayLib.sol";
 import {EIP712} from "solady/utils/EIP712.sol";
 import {ECDSA} from "solady/utils/ECDSA.sol";
+import {LibAGW} from "absmate/utils/LibAGW.sol";
 
 /// @dev This contract can be used by itself or as a proxy's implementation.
 contract Sheepy404 is DN404, SheepyBase, EIP712 {
@@ -332,5 +333,16 @@ contract Sheepy404 is DN404, SheepyBase, EIP712 {
         returns (string memory, string memory)
     {
         return ("Sheepy404", "1");
+    }
+
+    /// @dev On Abstract chain, individual accounts have contract code, which would normally cause _skipNFTDefault to return true for all accounts.
+    /// To handle this, we treat AGW (Abstract Global Wallet) as an exception: only AGW contracts are skipped, while regular EOAs (even with code) are not.
+    /// This override ensures correct skipNFT behavior for Abstract chain accounts.
+    function _skipNFTDefault(address owner) internal view virtual override returns (bool result) {
+        if (LibAGW.isAGWContract(owner)) return false;
+        /// @solidity memory-safe-assembly
+        assembly {
+            result := iszero(iszero(extcodesize(owner)))
+        }
     }
 }

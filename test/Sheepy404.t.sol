@@ -50,6 +50,13 @@ contract Sheepy404Test is Test {
         mirror = new Sheepy404Mirror();
         sale = new SheepySale();
         (_BOB, _BOB_PRIVATE_KEY) = makeAddrAndKey("bob");
+
+        // Mock LibAGW.isAGW to always return false globally
+        vm.mockCall(
+            0xd5E3efDA6bB5aB545cc2358796E96D9033496Dda,
+            abi.encodeWithSignature("isAGW(address)"),
+            abi.encode(false)
+        );
     }
 
     function _initialize() internal {
@@ -154,6 +161,37 @@ contract Sheepy404Test is Test {
         vm.prank(_CHARLIE);
         sheepy.transfer(_BOB, _UNIT);
         assertEq(mirror.ownerOf(1), _BOB);
+    }
+
+    function testTransferToAGW() public {
+        _initialize();
+
+        vm.mockCall(
+            0xd5E3efDA6bB5aB545cc2358796E96D9033496Dda,
+            abi.encodeWithSignature("isAGW(address)", address(this)),
+            abi.encode(true)
+        );
+
+        vm.expectEmit();
+        emit Reset(1);
+        vm.prank(_ALICE);
+        sheepy.transfer(address(this), _UNIT); // address(this) has code
+        assertEq(mirror.balanceOf(address(this)), 1);
+        assertEq(sheepy.balanceOf(address(this)), _UNIT);
+        assertEq(mirror.totalSupply(), 1);
+        assertEq(mirror.ownerOf(1), address(this));
+
+        vm.mockCall(
+            0xd5E3efDA6bB5aB545cc2358796E96D9033496Dda,
+            abi.encodeWithSignature("isAGW(address)", address(this)),
+            abi.encode(false)
+        );
+
+        vm.prank(_ALICE);
+        sheepy.transfer(address(this), _UNIT);
+        assertEq(mirror.ownerOf(1), address(this));
+        assertEq(sheepy.balanceOf(address(this)), _UNIT * 2);
+        assertEq(mirror.totalSupply(), 1); // NFT does not mint
     }
 
     function testFreeReroll() public {
