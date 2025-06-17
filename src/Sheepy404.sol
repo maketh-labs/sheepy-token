@@ -12,8 +12,9 @@ import {LibAGW} from "absmate/utils/LibAGW.sol";
 
 /// @dev This contract can be used by itself or as a proxy's implementation.
 contract Sheepy404 is DN404, SheepyBase, EIP712 {
-    using LibBitmap for *;
-    using DynamicArrayLib for *;
+    using LibBitmap for LibBitmap.Bitmap;
+    using DynamicArrayLib for uint256[];
+    using DynamicArrayLib for address[];
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
     /*                           EVENTS                           */
