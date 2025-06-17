@@ -17,6 +17,22 @@ contract Sheepy404 is DN404, SheepyBase, EIP712 {
     using DynamicArrayLib for address[];
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
+    /*                           ERRORS                           */
+    /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
+
+    /// @dev Wrong payment amount.
+    error WrongPayment();
+
+    /// @dev Signature has expired.
+    error SignatureExpired();
+
+    /// @dev Signature has already been used.
+    error SignatureAlreadyUsed();
+
+    /// @dev Asset count is too small.
+    error AssetCountTooSmall();
+
+    /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
     /*                           EVENTS                           */
     /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
 
@@ -120,13 +136,13 @@ contract Sheepy404 is DN404, SheepyBase, EIP712 {
     /// @dev Allows the owner of the NFTs to pay to reveal the `tokenIds`.
     /// A NFT can be re-revealed even if it has been revealed.
     function reveal(uint256[] memory tokenIds) public payable virtual {
-        require(msg.value == revealPrice * tokenIds.length, "Wrong payment.");
+        if (msg.value != revealPrice * tokenIds.length) revert WrongPayment();
         _reveal(tokenIds);
     }
 
     /// @dev Allows the owner of the NFTs to pay to reroll the `tokenIds`.
     function reroll(uint256[] memory tokenIds) public payable {
-        require(msg.value == rerollPrice * tokenIds.length, "Wrong payment.");
+        if (msg.value != rerollPrice * tokenIds.length) revert WrongPayment();
         _reroll(tokenIds);
     }
 
@@ -145,10 +161,10 @@ contract Sheepy404 is DN404, SheepyBase, EIP712 {
             v := byte(0, mload(add(signature, 0x60)))
         }
         address signer = ecrecover(hash, v, r, s);
-        require(hasRole(signer, ADMIN_ROLE), "Unauthorized.");
-        require(block.timestamp <= deadline, "Signature expired.");
+        if (!hasRole(signer, ADMIN_ROLE)) revert Unauthorized();
+        if (block.timestamp > deadline) revert SignatureExpired();
         bytes32 sigHash = ECDSA.canonicalHash(signature);
-        require(!usedSignatures[sigHash], "Signature already used.");
+        if (usedSignatures[sigHash]) revert SignatureAlreadyUsed();
         usedSignatures[sigHash] = true;
         _reveal(tokenIds);
     }
@@ -169,10 +185,10 @@ contract Sheepy404 is DN404, SheepyBase, EIP712 {
             v := byte(0, mload(add(signature, 0x60)))
         }
         address signer = ecrecover(hash, v, r, s);
-        require(hasRole(signer, ADMIN_ROLE), "Unauthorized.");
-        require(block.timestamp <= deadline, "Signature expired.");
+        if (!hasRole(signer, ADMIN_ROLE)) revert Unauthorized();
+        if (block.timestamp > deadline) revert SignatureExpired();
         bytes32 sigHash = ECDSA.canonicalHash(signature);
-        require(!usedSignatures[sigHash], "Signature already used.");
+        if (usedSignatures[sigHash]) revert SignatureAlreadyUsed();
         usedSignatures[sigHash] = true;
         _reroll(tokenIds);
     }
@@ -228,7 +244,7 @@ contract Sheepy404 is DN404, SheepyBase, EIP712 {
     /// @dev Sets the asset count.
     function setAssetCount(uint256 newAssetCount) public onlyOwnerOrRole(ADMIN_ROLE) {
         uint256 minAssetCount = totalSupply() / _unit();
-        require(newAssetCount >= minAssetCount, "Asset count too small");
+        if (newAssetCount < minAssetCount) revert AssetCountTooSmall();
         emit AssetCount(newAssetCount);
     }
 
@@ -250,7 +266,7 @@ contract Sheepy404 is DN404, SheepyBase, EIP712 {
     function _reveal(uint256[] memory tokenIds) internal {
         for (uint256 i; i < tokenIds.length; ++i) {
             uint256 id = tokenIds.get(i);
-            require(_callerIsAuthorizedFor(id), "Unauthorized.");
+            if (!_callerIsAuthorizedFor(id)) revert Unauthorized();
             if (_revealed.get(id)) continue;
             _revealed.set(id);
             emit Reveal(id);
@@ -262,7 +278,7 @@ contract Sheepy404 is DN404, SheepyBase, EIP712 {
     function _reroll(uint256[] memory tokenIds) internal {
         for (uint256 i; i < tokenIds.length; ++i) {
             uint256 id = tokenIds.get(i);
-            require(_callerIsAuthorizedFor(id), "Unauthorized.");
+            if (!_callerIsAuthorizedFor(id)) revert Unauthorized();
             emit Reroll(id);
             _logMetadataUpdate(id);
         }

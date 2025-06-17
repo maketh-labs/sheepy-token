@@ -11,6 +11,31 @@ contract SheepySale is SheepyBase {
     using ECDSA for bytes32;
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
+    /*                           ERRORS                           */
+    /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
+
+    /// @dev Amount must be greater than zero.
+    error AmountZero();
+
+    /// @dev ERC20 token not set.
+    error ERC20NotSet();
+
+    /// @dev Sale is not currently open.
+    error SaleNotOpen();
+
+    /// @dev Exceeded total sale quota.
+    error ExceededTotalQuota();
+
+    /// @dev Exceeded per-address quota.
+    error ExceededAddressQuota();
+
+    /// @dev Wrong payment amount.
+    error WrongPayment();
+
+    /// @dev Invalid signature provided.
+    error InvalidSignature();
+
+    /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
     /*                          STRUCTS                           */
     /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
 
@@ -99,20 +124,20 @@ contract SheepySale is SheepyBase {
         uint256 customAddressQuota,
         bytes calldata signature
     ) public payable {
-        require(amount > 0, "Amount must be greater than zero.");
+        if (amount == 0) revert AmountZero();
         Sale storage s = _sales[saleId];
-        require(s.erc20ToSell != address(0), "ERC20 not set.");
-        require(s.startTime <= block.timestamp && block.timestamp <= s.endTime, "Not open.");
-        require((s.totalBought += amount) <= s.totalQuota, "Exceeded total quota.");
+        if (s.erc20ToSell == address(0)) revert ERC20NotSet();
+        if (s.startTime > block.timestamp || block.timestamp > s.endTime) revert SaleNotOpen();
+        if ((s.totalBought += amount) > s.totalQuota) revert ExceededTotalQuota();
         uint256 minAddressQuota = FixedPointMathLib.min(customAddressQuota, s.addressQuota);
-        require((s.bought[msg.sender] += amount) <= minAddressQuota, "Exceeded address quota.");
-        require(msg.value == priceOf(s.erc20ToSell, amount, s.price), "Wrong payment.");
+        if ((s.bought[msg.sender] += amount) > minAddressQuota) revert ExceededAddressQuota();
+        if (msg.value != priceOf(s.erc20ToSell, amount, s.price)) revert WrongPayment();
 
         if (s.signer != address(0)) {
             bytes32 hash = keccak256("SheepySale");
             hash = keccak256(abi.encode(hash, saleId, msg.sender, customAddressQuota));
             hash = hash.toEthSignedMessageHash();
-            require(hash.recover(signature) == s.signer, "Invalid signature.");
+            if (hash.recover(signature) != s.signer) revert InvalidSignature();
         }
         SafeTransferLib.safeTransfer(s.erc20ToSell, to, amount);
         emit Bought(msg.sender, to, s.erc20ToSell, s.price, amount);

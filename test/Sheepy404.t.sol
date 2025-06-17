@@ -3,6 +3,7 @@ pragma solidity ^0.8.4;
 
 import "forge-std/Test.sol";
 import "../src/Sheepy404.sol";
+import "../src/SheepyBase.sol";
 import "../src/Sheepy404Mirror.sol";
 import "../src/SheepySale.sol";
 import "solady/utils/DynamicArrayLib.sol";
@@ -230,7 +231,7 @@ contract Sheepy404Test is Test {
 
         // Test signature reuse (should fail)
         vm.prank(_BOB);
-        vm.expectRevert("Signature already used.");
+        vm.expectRevert(Sheepy404.SignatureAlreadyUsed.selector);
         sheepy.freeReroll(tokenIds, deadline, signature);
 
         // Test unauthorized signature
@@ -243,7 +244,7 @@ contract Sheepy404Test is Test {
         bytes memory unauthorizedSignature = abi.encodePacked(r, s, v);
 
         vm.prank(_BOB);
-        vm.expectRevert("Unauthorized.");
+        vm.expectRevert(Ownable.Unauthorized.selector);
         sheepy.freeReroll(tokenIds, newDeadline, unauthorizedSignature);
 
         // Test unauthorized caller
@@ -261,7 +262,7 @@ contract Sheepy404Test is Test {
 
         // Try to reroll with CHARLIE's token using BOB's signature
         vm.prank(_CHARLIE);
-        vm.expectRevert("Unauthorized.");
+        vm.expectRevert(Ownable.Unauthorized.selector);
         sheepy.freeReroll(tokenIds, newDeadline, newSignature);
 
         // Test invalid signature format
@@ -319,7 +320,7 @@ contract Sheepy404Test is Test {
 
         // Test signature reuse (should fail)
         vm.prank(_BOB);
-        vm.expectRevert("Signature already used.");
+        vm.expectRevert(Sheepy404.SignatureAlreadyUsed.selector);
         sheepy.freeReveal(tokenIds, deadline, signature);
 
         // Test unauthorized signature
@@ -332,7 +333,7 @@ contract Sheepy404Test is Test {
         bytes memory unauthorizedSignature = abi.encodePacked(r, s, v);
 
         vm.prank(_BOB);
-        vm.expectRevert("Unauthorized.");
+        vm.expectRevert(Ownable.Unauthorized.selector);
         sheepy.freeReveal(tokenIds, newDeadline, unauthorizedSignature);
 
         // Test unauthorized caller
@@ -350,7 +351,7 @@ contract Sheepy404Test is Test {
 
         // Try to reveal with CHARLIE's token using BOB's signature
         vm.prank(_CHARLIE);
-        vm.expectRevert("Unauthorized.");
+        vm.expectRevert(Ownable.Unauthorized.selector);
         sheepy.freeReveal(tokenIds, newDeadline, newSignature);
 
         // Test invalid signature format
@@ -402,7 +403,7 @@ contract Sheepy404Test is Test {
 
         // Test setting asset count below minimum
         vm.prank(_BOB);
-        vm.expectRevert("Asset count too small");
+        vm.expectRevert(Sheepy404.AssetCountTooSmall.selector);
         sheepy.setAssetCount(initialMinAssetCount - 1);
 
         // Test setting max uint256
@@ -520,7 +521,7 @@ contract Sheepy404Test is Test {
 
         // Test quota exceeded
         vm.prank(_CHARLIE);
-        vm.expectRevert("Exceeded address quota.");
+        vm.expectRevert(SheepySale.ExceededAddressQuota.selector);
         sale.buy(1, _CHARLIE, claimAmount, customQuota, signature);
     }
 
@@ -554,7 +555,7 @@ contract Sheepy404Test is Test {
         bytes memory wrongSignature = abi.encodePacked(r, s, v);
 
         vm.prank(_CHARLIE);
-        vm.expectRevert("Invalid signature.");
+        vm.expectRevert(SheepySale.InvalidSignature.selector);
         sale.buy(1, _CHARLIE, claimAmount, customQuota, wrongSignature);
 
         // Test signature for different user
@@ -565,7 +566,7 @@ contract Sheepy404Test is Test {
         bytes memory davidSignature = abi.encodePacked(r, s, v);
 
         vm.prank(_CHARLIE); // CHARLIE tries to use DAVID's signature
-        vm.expectRevert("Invalid signature.");
+        vm.expectRevert(SheepySale.InvalidSignature.selector);
         sale.buy(1, _CHARLIE, claimAmount, customQuota, davidSignature);
     }
 
@@ -609,7 +610,7 @@ contract Sheepy404Test is Test {
         bytes memory davidSignature = abi.encodePacked(r, s, v);
 
         vm.prank(_DAVID);
-        vm.expectRevert("Exceeded total quota.");
+        vm.expectRevert(SheepySale.ExceededTotalQuota.selector);
         sale.buy(1, _DAVID, claimAmount, customQuota, davidSignature);
     }
 
@@ -642,7 +643,7 @@ contract Sheepy404Test is Test {
 
         // Test claim before start time
         vm.prank(_CHARLIE);
-        vm.expectRevert("Not open.");
+        vm.expectRevert(SheepySale.SaleNotOpen.selector);
         sale.buy(1, _CHARLIE, claimAmount, customQuota, signature);
 
         // Test claim during valid time
@@ -654,7 +655,7 @@ contract Sheepy404Test is Test {
         // Test claim after end time
         vm.warp(block.timestamp + 100);
         vm.prank(_CHARLIE);
-        vm.expectRevert("Not open.");
+        vm.expectRevert(SheepySale.SaleNotOpen.selector);
         sale.buy(1, _CHARLIE, claimAmount, customQuota, signature);
     }
 
@@ -700,12 +701,12 @@ contract Sheepy404Test is Test {
 
         // Try to reuse reveal signature (should fail)
         vm.prank(_BOB);
-        vm.expectRevert("Signature already used.");
+        vm.expectRevert(Sheepy404.SignatureAlreadyUsed.selector);
         sheepy.freeReveal(tokenIds, deadline, revealSignature);
 
         // Try to reuse reroll signature (should fail)
         vm.prank(_BOB);
-        vm.expectRevert("Signature already used.");
+        vm.expectRevert(Sheepy404.SignatureAlreadyUsed.selector);
         sheepy.freeReroll(tokenIds, deadline, rerollSignature);
     }
 
@@ -751,7 +752,7 @@ contract Sheepy404Test is Test {
         signature = abi.encodePacked(r, s, v);
 
         vm.prank(_BOB);
-        vm.expectRevert("Signature expired.");
+        vm.expectRevert(Sheepy404.SignatureExpired.selector);
         sheepy.freeReveal(tokenIds, expiredDeadline, signature);
     }
 
@@ -790,7 +791,7 @@ contract Sheepy404Test is Test {
 
         // CHARLIE tries to claim 10 more (total would be 55), should fail because effective quota is 50
         vm.prank(_CHARLIE);
-        vm.expectRevert("Exceeded address quota.");
+        vm.expectRevert(SheepySale.ExceededAddressQuota.selector);
         sale.buy(1, _CHARLIE, 10 * _WAD, charlieCustomQuota, charlieSignature);
 
         // DAVID gets custom quota of 30 (lower than default)
@@ -809,7 +810,7 @@ contract Sheepy404Test is Test {
 
         // DAVID tries to claim 10 more (total would be 35), should fail because custom quota is 30
         vm.prank(_DAVID);
-        vm.expectRevert("Exceeded address quota.");
+        vm.expectRevert(SheepySale.ExceededAddressQuota.selector);
         sale.buy(1, _DAVID, 10 * _WAD, davidCustomQuota, davidSignature);
     }
 }
