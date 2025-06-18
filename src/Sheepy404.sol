@@ -12,8 +12,9 @@ import {LibAGW} from "absmate/utils/LibAGW.sol";
 
 /// @dev This contract can be used by itself or as a proxy's implementation.
 contract Sheepy404 is DN404, SheepyBase, EIP712 {
-    using LibBitmap for *;
-    using DynamicArrayLib for *;
+    using LibBitmap for LibBitmap.Bitmap;
+    using DynamicArrayLib for uint256[];
+    using DynamicArrayLib for address[];
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
     /*                           EVENTS                           */
@@ -120,25 +121,13 @@ contract Sheepy404 is DN404, SheepyBase, EIP712 {
     /// A NFT can be re-revealed even if it has been revealed.
     function reveal(uint256[] memory tokenIds) public payable virtual {
         require(msg.value == revealPrice * tokenIds.length, "Wrong payment.");
-        for (uint256 i; i < tokenIds.length; ++i) {
-            uint256 id = tokenIds.get(i);
-            require(_callerIsAuthorizedFor(id), "Unauthorized.");
-            if (_revealed.get(id)) continue;
-            _revealed.set(id);
-            emit Reveal(id);
-            _logMetadataUpdate(id);
-        }
+        _reveal(tokenIds);
     }
 
     /// @dev Allows the owner of the NFTs to pay to reroll the `tokenIds`.
     function reroll(uint256[] memory tokenIds) public payable {
         require(msg.value == rerollPrice * tokenIds.length, "Wrong payment.");
-        for (uint256 i; i < tokenIds.length; ++i) {
-            uint256 id = tokenIds.get(i);
-            require(_callerIsAuthorizedFor(id), "Unauthorized.");
-            emit Reroll(id);
-            _logMetadataUpdate(id);
-        }
+        _reroll(tokenIds);
     }
 
     function freeReveal(uint256[] memory tokenIds, uint256 deadline, bytes memory signature)
@@ -161,13 +150,7 @@ contract Sheepy404 is DN404, SheepyBase, EIP712 {
         bytes32 sigHash = ECDSA.canonicalHash(signature);
         require(!usedSignatures[sigHash], "Signature already used.");
         usedSignatures[sigHash] = true;
-        for (uint256 i; i < tokenIds.length; ++i) {
-            uint256 id = tokenIds.get(i);
-            require(_callerIsAuthorizedFor(id), "Unauthorized.");
-            _revealed.set(id);
-            emit Reveal(id);
-            _logMetadataUpdate(id);
-        }
+        _reveal(tokenIds);
     }
 
     /// require a signature from the owner to reroll
@@ -191,12 +174,7 @@ contract Sheepy404 is DN404, SheepyBase, EIP712 {
         bytes32 sigHash = ECDSA.canonicalHash(signature);
         require(!usedSignatures[sigHash], "Signature already used.");
         usedSignatures[sigHash] = true;
-        for (uint256 i; i < tokenIds.length; ++i) {
-            uint256 id = tokenIds.get(i);
-            require(_callerIsAuthorizedFor(id), "Unauthorized.");
-            emit Reroll(id);
-            _logMetadataUpdate(id);
-        }
+        _reroll(tokenIds);
     }
 
     /// @dev Returns if each of the `tokenIds` has been revealed.
@@ -268,6 +246,51 @@ contract Sheepy404 is DN404, SheepyBase, EIP712 {
         return false;
     }
 
+    /// @dev Internal function to handle the reveal logic for token IDs.
+    function _reveal(uint256[] memory tokenIds) internal {
+        for (uint256 i; i < tokenIds.length; ++i) {
+            uint256 id = tokenIds.get(i);
+            require(_callerIsAuthorizedFor(id), "Unauthorized.");
+            if (_revealed.get(id)) continue;
+            _revealed.set(id);
+            emit Reveal(id);
+            _logMetadataUpdate(id);
+        }
+    }
+
+    /// @dev Internal function to handle the reroll logic for token IDs.
+    function _reroll(uint256[] memory tokenIds) internal {
+        for (uint256 i; i < tokenIds.length; ++i) {
+            uint256 id = tokenIds.get(i);
+            require(_callerIsAuthorizedFor(id), "Unauthorized.");
+            emit Reroll(id);
+            _logMetadataUpdate(id);
+        }
+    }
+
+    /// @dev Helper function to log metadata update to the mirror
+    function _logMetadataUpdate(uint256 tokenId) internal {
+        address mirror = _getDN404Storage().mirrorERC721;
+        /// @solidity memory-safe-assembly
+        assembly {
+            mstore(0x00, 0x9e1569c7) // logMetadataUpdate(uint256)
+            mstore(0x20, tokenId)
+            pop(call(gas(), mirror, 0, 0x1c, 0x24, 0x00, 0x20))
+        }
+    }
+
+    /// @dev Helper function to log batch metadata update to the mirror
+    function _logBatchMetadataUpdate(uint256 fromTokenId, uint256 toTokenId) internal {
+        address mirror = _getDN404Storage().mirrorERC721;
+        /// @solidity memory-safe-assembly
+        assembly {
+            mstore(0x00, 0x5f3058f7) // logBatchMetadataUpdate(uint256,uint256)
+            mstore(0x20, fromTokenId)
+            mstore(0x40, toTokenId)
+            pop(call(gas(), mirror, 0, 0x1c, 0x44, 0x00, 0x20))
+        }
+    }
+
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
     /*                         OVERRIDES                          */
     /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
@@ -295,29 +318,6 @@ contract Sheepy404 is DN404, SheepyBase, EIP712 {
     /// @dev Need to override this.
     function _useAfterNFTTransfers() internal virtual override returns (bool) {
         return true;
-    }
-
-    /// @dev Helper function to log metadata update to the mirror
-    function _logMetadataUpdate(uint256 tokenId) internal {
-        address mirror = _getDN404Storage().mirrorERC721;
-        /// @solidity memory-safe-assembly
-        assembly {
-            mstore(0x00, 0x9e1569c7) // logMetadataUpdate(uint256)
-            mstore(0x20, tokenId)
-            pop(call(gas(), mirror, 0, 0x1c, 0x24, 0x00, 0x20))
-        }
-    }
-
-    /// @dev Helper function to log batch metadata update to the mirror
-    function _logBatchMetadataUpdate(uint256 fromTokenId, uint256 toTokenId) internal {
-        address mirror = _getDN404Storage().mirrorERC721;
-        /// @solidity memory-safe-assembly
-        assembly {
-            mstore(0x00, 0x5f3058f7) // logBatchMetadataUpdate(uint256,uint256)
-            mstore(0x20, fromTokenId)
-            mstore(0x40, toTokenId)
-            pop(call(gas(), mirror, 0, 0x1c, 0x44, 0x00, 0x20))
-        }
     }
 
     /// @dev 1m full ERC20 tokens for 1 ERC721 NFT.
