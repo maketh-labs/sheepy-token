@@ -39,8 +39,8 @@ contract SheepySale is SheepyBase {
     /*                          STRUCTS                           */
     /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
 
-    /// @dev For configuring a sale.
-    struct SaleConfig {
+    /// @dev Holds the information for a sale.
+    struct Sale {
         // The address of the ERC20 to sell.
         address erc20ToSell;
         // The sale start timestamp.
@@ -54,21 +54,11 @@ contract SheepySale is SheepyBase {
         uint96 totalQuota;
         // The maximum amount in wei that can be bought per-address.
         uint96 addressQuota;
+        // The total amount bought in wei.
+        uint96 totalBought;
         // Leave as `address(0)` if no WL required.
         // If WL is required, the hash to be signed is:
         // `keccak256(abi.encode(keccak256("SheepySale"), saleId, msg.sender, customAddressQuota))`.
-        address signer;
-    }
-
-    /// @dev Holds the information for a sale.
-    struct SaleInfo {
-        address erc20ToSell;
-        uint40 startTime;
-        uint40 endTime;
-        uint96 price;
-        uint96 totalQuota;
-        uint96 addressQuota;
-        uint96 totalBought;
         address signer;
     }
 
@@ -83,21 +73,9 @@ contract SheepySale is SheepyBase {
     /*                          STORAGE                           */
     /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
 
-    /// @dev Sale storage.
-    struct Sale {
-        address erc20ToSell;
-        uint40 startTime;
-        uint40 endTime;
-        uint96 price;
-        uint96 totalQuota;
-        uint96 addressQuota;
-        uint96 totalBought;
-        address signer;
-        mapping(address => uint256) bought;
-    }
-
     /// @dev The sales structs.
-    mapping(uint256 => Sale) internal _sales;
+    mapping(uint256 saleId => Sale) internal _sales;
+    mapping(uint256 saleId => mapping(address user => uint256 amount)) internal _bought;
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
     /*                        INITIALIZER                         */
@@ -130,7 +108,9 @@ contract SheepySale is SheepyBase {
         if (s.startTime > block.timestamp || block.timestamp > s.endTime) revert SaleNotOpen();
         if ((s.totalBought += amount) > s.totalQuota) revert ExceededTotalQuota();
         uint256 minAddressQuota = FixedPointMathLib.min(customAddressQuota, s.addressQuota);
-        if ((s.bought[msg.sender] += amount) > minAddressQuota) revert ExceededAddressQuota();
+        if ((_bought[saleId][msg.sender] += amount) > minAddressQuota) {
+            revert ExceededAddressQuota();
+        }
         if (msg.value != priceOf(s.erc20ToSell, amount, s.price)) revert WrongPayment();
 
         if (s.signer != address(0)) {
@@ -154,21 +134,13 @@ contract SheepySale is SheepyBase {
     /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
 
     /// @dev Returns info for `saleId`.
-    function saleInfo(uint256 saleId) public view returns (SaleInfo memory info) {
-        Sale storage s = _sales[saleId];
-        info.erc20ToSell = s.erc20ToSell;
-        info.startTime = s.startTime;
-        info.endTime = s.endTime;
-        info.price = s.price;
-        info.totalQuota = s.totalQuota;
-        info.addressQuota = s.addressQuota;
-        info.signer = s.signer;
-        info.totalBought = s.totalBought;
+    function saleInfo(uint256 saleId) public view returns (Sale memory) {
+        return _sales[saleId];
     }
 
     /// @dev Returns the total amount bought by `by` in `saleId`.
     function bought(uint256 saleId, address by) public view returns (uint256) {
-        return _sales[saleId].bought[by];
+        return _bought[saleId][by];
     }
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
@@ -176,14 +148,25 @@ contract SheepySale is SheepyBase {
     /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
 
     /// @dev Sets the sale config.
-    function setSale(uint256 saleId, SaleConfig calldata c) public onlyOwnerOrRole(ADMIN_ROLE) {
-        Sale storage s = _sales[saleId];
-        s.erc20ToSell = c.erc20ToSell;
-        s.startTime = c.startTime;
-        s.endTime = c.endTime;
-        s.price = c.price;
-        s.totalQuota = c.totalQuota;
-        s.addressQuota = c.addressQuota;
-        s.signer = c.signer;
+    function setSale(
+        uint256 saleId,
+        address erc20ToSell,
+        uint40 startTime,
+        uint40 endTime,
+        uint96 price,
+        uint96 totalQuota,
+        uint96 addressQuota,
+        address signer
+    ) public onlyOwnerOrRole(ADMIN_ROLE) {
+        _sales[saleId] = Sale({
+            erc20ToSell: erc20ToSell,
+            startTime: startTime,
+            endTime: endTime,
+            price: price,
+            totalQuota: totalQuota,
+            addressQuota: addressQuota,
+            totalBought: 0,
+            signer: signer
+        });
     }
 }

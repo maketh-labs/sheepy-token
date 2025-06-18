@@ -105,16 +105,8 @@ contract Sheepy404Test is Test {
     function testSale() public {
         _initialize();
 
-        SheepySale.SaleConfig memory c;
-        c.erc20ToSell = address(sheepy);
-        c.startTime = 1;
-        c.endTime = 10000;
-        c.price = uint96(0.03 ether);
-        c.totalQuota = 10;
-        c.addressQuota = 2;
-
         vm.prank(_ALICE);
-        sale.setSale(1, c);
+        sale.setSale(1, address(sheepy), 1, 10000, uint96(0.03 ether), 10, 2, address(0));
     }
 
     function testSalePriceOf() public view {
@@ -481,17 +473,17 @@ contract Sheepy404Test is Test {
         _initialize();
 
         // Setup airdrop sale with price = 0
-        SheepySale.SaleConfig memory c;
-        c.erc20ToSell = address(sheepy);
-        c.price = 0; // Free airdrop
-        c.startTime = 1;
-        c.endTime = uint40(block.timestamp + 1000);
-        c.totalQuota = uint96(1000 * _WAD);
-        c.addressQuota = uint96(100 * _WAD);
-        c.signer = _BOB; // BOB will sign the claims
-
         vm.prank(_ALICE);
-        sale.setSale(1, c);
+        sale.setSale(
+            1,
+            address(sheepy),
+            1,
+            uint40(block.timestamp + 1000),
+            0, // Free airdrop
+            uint96(1000 * _WAD),
+            uint96(100 * _WAD),
+            _BOB // BOB will sign the claims
+        );
 
         // Fund the sale contract with tokens
         vm.prank(_ALICE);
@@ -529,17 +521,17 @@ contract Sheepy404Test is Test {
         _initialize();
 
         // Setup airdrop sale
-        SheepySale.SaleConfig memory c;
-        c.erc20ToSell = address(sheepy);
-        c.price = 0;
-        c.startTime = 1;
-        c.endTime = uint40(block.timestamp + 1000);
-        c.totalQuota = uint96(1000 * _WAD);
-        c.addressQuota = uint96(100 * _WAD);
-        c.signer = _BOB;
-
         vm.prank(_ALICE);
-        sale.setSale(1, c);
+        sale.setSale(
+            1,
+            address(sheepy),
+            1,
+            uint40(block.timestamp + 1000),
+            0,
+            uint96(1000 * _WAD),
+            uint96(100 * _WAD),
+            _BOB
+        );
 
         vm.prank(_ALICE);
         sheepy.transfer(address(sale), 1000 * _WAD);
@@ -574,17 +566,17 @@ contract Sheepy404Test is Test {
         _initialize();
 
         // Setup airdrop with small quotas
-        SheepySale.SaleConfig memory c;
-        c.erc20ToSell = address(sheepy);
-        c.price = 0;
-        c.startTime = 1;
-        c.endTime = uint40(block.timestamp + 1000);
-        c.totalQuota = uint96(150 * _WAD); // Total quota smaller than address quota
-        c.addressQuota = uint96(200 * _WAD);
-        c.signer = _BOB;
-
         vm.prank(_ALICE);
-        sale.setSale(1, c);
+        sale.setSale(
+            1,
+            address(sheepy),
+            1,
+            uint40(block.timestamp + 1000),
+            0,
+            uint96(150 * _WAD), // Total quota smaller than address quota
+            uint96(200 * _WAD),
+            _BOB
+        );
 
         vm.prank(_ALICE);
         sheepy.transfer(address(sale), 1000 * _WAD);
@@ -618,17 +610,17 @@ contract Sheepy404Test is Test {
         _initialize();
 
         // Setup airdrop with time bounds
-        SheepySale.SaleConfig memory c;
-        c.erc20ToSell = address(sheepy);
-        c.price = 0;
-        c.startTime = uint40(block.timestamp + 100);
-        c.endTime = uint40(block.timestamp + 200);
-        c.totalQuota = uint96(1000 * _WAD);
-        c.addressQuota = uint96(100 * _WAD);
-        c.signer = _BOB;
-
         vm.prank(_ALICE);
-        sale.setSale(1, c);
+        sale.setSale(
+            1,
+            address(sheepy),
+            uint40(block.timestamp + 100),
+            uint40(block.timestamp + 200),
+            0,
+            uint96(1000 * _WAD),
+            uint96(100 * _WAD),
+            _BOB
+        );
 
         vm.prank(_ALICE);
         sheepy.transfer(address(sale), 1000 * _WAD);
@@ -760,17 +752,17 @@ contract Sheepy404Test is Test {
         _initialize();
 
         // Setup airdrop
-        SheepySale.SaleConfig memory c;
-        c.erc20ToSell = address(sheepy);
-        c.price = 0;
-        c.startTime = 1;
-        c.endTime = uint40(block.timestamp + 1000);
-        c.totalQuota = uint96(1000 * _WAD);
-        c.addressQuota = uint96(50 * _WAD); // Default quota is 50
-        c.signer = _BOB;
-
         vm.prank(_ALICE);
-        sale.setSale(1, c);
+        sale.setSale(
+            1,
+            address(sheepy),
+            1,
+            uint40(block.timestamp + 1000),
+            0,
+            uint96(1000 * _WAD),
+            uint96(50 * _WAD), // Default quota is 50
+            _BOB
+        );
 
         vm.prank(_ALICE);
         sheepy.transfer(address(sale), 1000 * _WAD);
