@@ -3,6 +3,7 @@ pragma solidity ^0.8.4;
 
 import "forge-std/Test.sol";
 import "../src/Sheepy404.sol";
+import "../src/SheepyBase.sol";
 import "../src/Sheepy404Mirror.sol";
 import "../src/SheepySale.sol";
 import "solady/utils/DynamicArrayLib.sol";
@@ -104,21 +105,13 @@ contract Sheepy404Test is Test {
     function testSale() public {
         _initialize();
 
-        SheepySale.SaleConfig memory c;
-        c.erc20ToSell = address(sheepy);
-        c.price = 0.03 ether;
-        c.startTime = 1;
-        c.endTime = 10000;
-        c.totalQuota = 10;
-        c.addressQuota = 2;
-
         vm.prank(_ALICE);
-        sale.setSale(1, c);
+        sale.setSale(1, address(sheepy), 1, 10000, uint96(0.03 ether), 10, 2, address(0));
     }
 
     function testSalePriceOf() public view {
-        uint256 amount = _WAD / 50;
-        uint256 pricePerWad = 0.03 ether;
+        uint96 amount = uint96(_WAD / 50);
+        uint96 pricePerWad = uint96(0.03 ether);
         uint256 totalPrice = sale.priceOf(address(sheepy), amount, pricePerWad);
         assertEq(totalPrice, (10 ** 18 / 50) * 0.03 ether / 10 ** 18);
     }
@@ -230,7 +223,7 @@ contract Sheepy404Test is Test {
 
         // Test signature reuse (should fail)
         vm.prank(_BOB);
-        vm.expectRevert("Signature already used.");
+        vm.expectRevert(Sheepy404.SignatureAlreadyUsed.selector);
         sheepy.freeReroll(tokenIds, deadline, signature);
 
         // Test unauthorized signature
@@ -243,7 +236,7 @@ contract Sheepy404Test is Test {
         bytes memory unauthorizedSignature = abi.encodePacked(r, s, v);
 
         vm.prank(_BOB);
-        vm.expectRevert("Unauthorized.");
+        vm.expectRevert(Ownable.Unauthorized.selector);
         sheepy.freeReroll(tokenIds, newDeadline, unauthorizedSignature);
 
         // Test unauthorized caller
@@ -261,7 +254,7 @@ contract Sheepy404Test is Test {
 
         // Try to reroll with CHARLIE's token using BOB's signature
         vm.prank(_CHARLIE);
-        vm.expectRevert("Unauthorized.");
+        vm.expectRevert(Ownable.Unauthorized.selector);
         sheepy.freeReroll(tokenIds, newDeadline, newSignature);
 
         // Test invalid signature format
@@ -319,7 +312,7 @@ contract Sheepy404Test is Test {
 
         // Test signature reuse (should fail)
         vm.prank(_BOB);
-        vm.expectRevert("Signature already used.");
+        vm.expectRevert(Sheepy404.SignatureAlreadyUsed.selector);
         sheepy.freeReveal(tokenIds, deadline, signature);
 
         // Test unauthorized signature
@@ -332,7 +325,7 @@ contract Sheepy404Test is Test {
         bytes memory unauthorizedSignature = abi.encodePacked(r, s, v);
 
         vm.prank(_BOB);
-        vm.expectRevert("Unauthorized.");
+        vm.expectRevert(Ownable.Unauthorized.selector);
         sheepy.freeReveal(tokenIds, newDeadline, unauthorizedSignature);
 
         // Test unauthorized caller
@@ -350,7 +343,7 @@ contract Sheepy404Test is Test {
 
         // Try to reveal with CHARLIE's token using BOB's signature
         vm.prank(_CHARLIE);
-        vm.expectRevert("Unauthorized.");
+        vm.expectRevert(Ownable.Unauthorized.selector);
         sheepy.freeReveal(tokenIds, newDeadline, newSignature);
 
         // Test invalid signature format
@@ -402,7 +395,7 @@ contract Sheepy404Test is Test {
 
         // Test setting asset count below minimum
         vm.prank(_BOB);
-        vm.expectRevert("Asset count too small");
+        vm.expectRevert(Sheepy404.AssetCountTooSmall.selector);
         sheepy.setAssetCount(initialMinAssetCount - 1);
 
         // Test setting max uint256
@@ -480,25 +473,25 @@ contract Sheepy404Test is Test {
         _initialize();
 
         // Setup airdrop sale with price = 0
-        SheepySale.SaleConfig memory c;
-        c.erc20ToSell = address(sheepy);
-        c.price = 0; // Free airdrop
-        c.startTime = 1;
-        c.endTime = block.timestamp + 1000;
-        c.totalQuota = 1000 * _WAD;
-        c.addressQuota = 100 * _WAD;
-        c.signer = _BOB; // BOB will sign the claims
-
         vm.prank(_ALICE);
-        sale.setSale(1, c);
+        sale.setSale(
+            1,
+            address(sheepy),
+            1,
+            uint40(block.timestamp + 1000),
+            0, // Free airdrop
+            uint96(1000 * _WAD),
+            uint96(100 * _WAD),
+            _BOB // BOB will sign the claims
+        );
 
         // Fund the sale contract with tokens
         vm.prank(_ALICE);
         sheepy.transfer(address(sale), 1000 * _WAD);
 
         // Create signature for CHARLIE to claim 50 tokens
-        uint256 claimAmount = 50 * _WAD;
-        uint256 customQuota = 100 * _WAD;
+        uint96 claimAmount = uint96(50 * _WAD);
+        uint96 customQuota = uint96(100 * _WAD);
         bytes32 hash = keccak256("SheepySale");
         hash = keccak256(abi.encode(hash, uint256(1), _CHARLIE, customQuota));
         hash = hash.toEthSignedMessageHash();
@@ -520,7 +513,7 @@ contract Sheepy404Test is Test {
 
         // Test quota exceeded
         vm.prank(_CHARLIE);
-        vm.expectRevert("Exceeded address quota.");
+        vm.expectRevert(SheepySale.ExceededAddressQuota.selector);
         sale.buy(1, _CHARLIE, claimAmount, customQuota, signature);
     }
 
@@ -528,23 +521,23 @@ contract Sheepy404Test is Test {
         _initialize();
 
         // Setup airdrop sale
-        SheepySale.SaleConfig memory c;
-        c.erc20ToSell = address(sheepy);
-        c.price = 0;
-        c.startTime = 1;
-        c.endTime = block.timestamp + 1000;
-        c.totalQuota = 1000 * _WAD;
-        c.addressQuota = 100 * _WAD;
-        c.signer = _BOB;
-
         vm.prank(_ALICE);
-        sale.setSale(1, c);
+        sale.setSale(
+            1,
+            address(sheepy),
+            1,
+            uint40(block.timestamp + 1000),
+            0,
+            uint96(1000 * _WAD),
+            uint96(100 * _WAD),
+            _BOB
+        );
 
         vm.prank(_ALICE);
         sheepy.transfer(address(sale), 1000 * _WAD);
 
-        uint256 claimAmount = 50 * _WAD;
-        uint256 customQuota = 100 * _WAD;
+        uint96 claimAmount = uint96(50 * _WAD);
+        uint96 customQuota = uint96(100 * _WAD);
 
         // Test with wrong signer (CHARLIE instead of BOB)
         bytes32 hash = keccak256("SheepySale");
@@ -554,7 +547,7 @@ contract Sheepy404Test is Test {
         bytes memory wrongSignature = abi.encodePacked(r, s, v);
 
         vm.prank(_CHARLIE);
-        vm.expectRevert("Invalid signature.");
+        vm.expectRevert(SheepySale.InvalidSignature.selector);
         sale.buy(1, _CHARLIE, claimAmount, customQuota, wrongSignature);
 
         // Test signature for different user
@@ -565,7 +558,7 @@ contract Sheepy404Test is Test {
         bytes memory davidSignature = abi.encodePacked(r, s, v);
 
         vm.prank(_CHARLIE); // CHARLIE tries to use DAVID's signature
-        vm.expectRevert("Invalid signature.");
+        vm.expectRevert(SheepySale.InvalidSignature.selector);
         sale.buy(1, _CHARLIE, claimAmount, customQuota, davidSignature);
     }
 
@@ -573,23 +566,23 @@ contract Sheepy404Test is Test {
         _initialize();
 
         // Setup airdrop with small quotas
-        SheepySale.SaleConfig memory c;
-        c.erc20ToSell = address(sheepy);
-        c.price = 0;
-        c.startTime = 1;
-        c.endTime = block.timestamp + 1000;
-        c.totalQuota = 150 * _WAD; // Total quota smaller than address quota
-        c.addressQuota = 200 * _WAD;
-        c.signer = _BOB;
-
         vm.prank(_ALICE);
-        sale.setSale(1, c);
+        sale.setSale(
+            1,
+            address(sheepy),
+            1,
+            uint40(block.timestamp + 1000),
+            0,
+            uint96(150 * _WAD), // Total quota smaller than address quota
+            uint96(200 * _WAD),
+            _BOB
+        );
 
         vm.prank(_ALICE);
         sheepy.transfer(address(sale), 1000 * _WAD);
 
-        uint256 claimAmount = 100 * _WAD;
-        uint256 customQuota = 200 * _WAD;
+        uint96 claimAmount = uint96(100 * _WAD);
+        uint96 customQuota = uint96(200 * _WAD);
 
         // CHARLIE claims first
         bytes32 hash = keccak256("SheepySale");
@@ -609,7 +602,7 @@ contract Sheepy404Test is Test {
         bytes memory davidSignature = abi.encodePacked(r, s, v);
 
         vm.prank(_DAVID);
-        vm.expectRevert("Exceeded total quota.");
+        vm.expectRevert(SheepySale.ExceededTotalQuota.selector);
         sale.buy(1, _DAVID, claimAmount, customQuota, davidSignature);
     }
 
@@ -617,23 +610,23 @@ contract Sheepy404Test is Test {
         _initialize();
 
         // Setup airdrop with time bounds
-        SheepySale.SaleConfig memory c;
-        c.erc20ToSell = address(sheepy);
-        c.price = 0;
-        c.startTime = block.timestamp + 100;
-        c.endTime = block.timestamp + 200;
-        c.totalQuota = 1000 * _WAD;
-        c.addressQuota = 100 * _WAD;
-        c.signer = _BOB;
-
         vm.prank(_ALICE);
-        sale.setSale(1, c);
+        sale.setSale(
+            1,
+            address(sheepy),
+            uint40(block.timestamp + 100),
+            uint40(block.timestamp + 200),
+            0,
+            uint96(1000 * _WAD),
+            uint96(100 * _WAD),
+            _BOB
+        );
 
         vm.prank(_ALICE);
         sheepy.transfer(address(sale), 1000 * _WAD);
 
-        uint256 claimAmount = 50 * _WAD;
-        uint256 customQuota = 100 * _WAD;
+        uint96 claimAmount = uint96(50 * _WAD);
+        uint96 customQuota = uint96(100 * _WAD);
         bytes32 hash = keccak256("SheepySale");
         hash = keccak256(abi.encode(hash, uint256(1), _CHARLIE, customQuota));
         hash = hash.toEthSignedMessageHash();
@@ -642,7 +635,7 @@ contract Sheepy404Test is Test {
 
         // Test claim before start time
         vm.prank(_CHARLIE);
-        vm.expectRevert("Not open.");
+        vm.expectRevert(SheepySale.SaleNotOpen.selector);
         sale.buy(1, _CHARLIE, claimAmount, customQuota, signature);
 
         // Test claim during valid time
@@ -654,7 +647,7 @@ contract Sheepy404Test is Test {
         // Test claim after end time
         vm.warp(block.timestamp + 100);
         vm.prank(_CHARLIE);
-        vm.expectRevert("Not open.");
+        vm.expectRevert(SheepySale.SaleNotOpen.selector);
         sale.buy(1, _CHARLIE, claimAmount, customQuota, signature);
     }
 
@@ -700,12 +693,12 @@ contract Sheepy404Test is Test {
 
         // Try to reuse reveal signature (should fail)
         vm.prank(_BOB);
-        vm.expectRevert("Signature already used.");
+        vm.expectRevert(Sheepy404.SignatureAlreadyUsed.selector);
         sheepy.freeReveal(tokenIds, deadline, revealSignature);
 
         // Try to reuse reroll signature (should fail)
         vm.prank(_BOB);
-        vm.expectRevert("Signature already used.");
+        vm.expectRevert(Sheepy404.SignatureAlreadyUsed.selector);
         sheepy.freeReroll(tokenIds, deadline, rerollSignature);
     }
 
@@ -751,7 +744,7 @@ contract Sheepy404Test is Test {
         signature = abi.encodePacked(r, s, v);
 
         vm.prank(_BOB);
-        vm.expectRevert("Signature expired.");
+        vm.expectRevert(Sheepy404.SignatureExpired.selector);
         sheepy.freeReveal(tokenIds, expiredDeadline, signature);
     }
 
@@ -759,24 +752,24 @@ contract Sheepy404Test is Test {
         _initialize();
 
         // Setup airdrop
-        SheepySale.SaleConfig memory c;
-        c.erc20ToSell = address(sheepy);
-        c.price = 0;
-        c.startTime = 1;
-        c.endTime = block.timestamp + 1000;
-        c.totalQuota = 1000 * _WAD;
-        c.addressQuota = 50 * _WAD; // Default quota is 50
-        c.signer = _BOB;
-
         vm.prank(_ALICE);
-        sale.setSale(1, c);
+        sale.setSale(
+            1,
+            address(sheepy),
+            1,
+            uint40(block.timestamp + 1000),
+            0,
+            uint96(1000 * _WAD),
+            uint96(50 * _WAD), // Default quota is 50
+            _BOB
+        );
 
         vm.prank(_ALICE);
         sheepy.transfer(address(sale), 1000 * _WAD);
 
         // CHARLIE gets custom quota of 100 (higher than default)
         // But effective quota is min(100, 50) = 50
-        uint256 charlieCustomQuota = 100 * _WAD;
+        uint96 charlieCustomQuota = uint96(100 * _WAD);
         bytes32 hash = keccak256("SheepySale");
         hash = keccak256(abi.encode(hash, uint256(1), _CHARLIE, charlieCustomQuota));
         hash = hash.toEthSignedMessageHash();
@@ -785,17 +778,17 @@ contract Sheepy404Test is Test {
 
         // Should succeed because claim amount (45) is within effective quota of min(100, 50) = 50
         vm.prank(_CHARLIE);
-        sale.buy(1, _CHARLIE, 45 * _WAD, charlieCustomQuota, charlieSignature);
+        sale.buy(1, _CHARLIE, uint96(45 * _WAD), charlieCustomQuota, charlieSignature);
         assertEq(sheepy.balanceOf(_CHARLIE), 45 * _WAD);
 
         // CHARLIE tries to claim 10 more (total would be 55), should fail because effective quota is 50
         vm.prank(_CHARLIE);
-        vm.expectRevert("Exceeded address quota.");
-        sale.buy(1, _CHARLIE, 10 * _WAD, charlieCustomQuota, charlieSignature);
+        vm.expectRevert(SheepySale.ExceededAddressQuota.selector);
+        sale.buy(1, _CHARLIE, uint96(10 * _WAD), charlieCustomQuota, charlieSignature);
 
         // DAVID gets custom quota of 30 (lower than default)
         // Effective quota is min(30, 50) = 30
-        uint256 davidCustomQuota = 30 * _WAD;
+        uint96 davidCustomQuota = uint96(30 * _WAD);
         hash = keccak256("SheepySale");
         hash = keccak256(abi.encode(hash, uint256(1), _DAVID, davidCustomQuota));
         hash = hash.toEthSignedMessageHash();
@@ -804,12 +797,12 @@ contract Sheepy404Test is Test {
 
         // Should succeed when claiming within custom quota (30)
         vm.prank(_DAVID);
-        sale.buy(1, _DAVID, 25 * _WAD, davidCustomQuota, davidSignature);
+        sale.buy(1, _DAVID, uint96(25 * _WAD), davidCustomQuota, davidSignature);
         assertEq(sheepy.balanceOf(_DAVID), 25 * _WAD);
 
         // DAVID tries to claim 10 more (total would be 35), should fail because custom quota is 30
         vm.prank(_DAVID);
-        vm.expectRevert("Exceeded address quota.");
-        sale.buy(1, _DAVID, 10 * _WAD, davidCustomQuota, davidSignature);
+        vm.expectRevert(SheepySale.ExceededAddressQuota.selector);
+        sale.buy(1, _DAVID, uint96(10 * _WAD), davidCustomQuota, davidSignature);
     }
 }
