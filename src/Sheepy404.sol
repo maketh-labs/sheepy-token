@@ -26,8 +26,8 @@ contract Sheepy404 is DN404, SheepyBase, EIP712 {
     /// @dev Signature has expired.
     error SignatureExpired();
 
-    /// @dev Signature has already been used.
-    error SignatureAlreadyUsed();
+    /// @dev Salt has already been used.
+    error SaltUsed();
 
     /// @dev Asset count is too small.
     error AssetCountTooSmall();
@@ -52,13 +52,13 @@ contract Sheepy404 is DN404, SheepyBase, EIP712 {
     /*                         CONSTANTS                          */
     /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
 
-    /// @dev `keccak256("FreeReveal(uint256[] tokenIds,uint256 deadline)")`.
+    /// @dev `keccak256("FreeReveal(uint256[] tokenIds,bytes32 salt,uint256 deadline)")`.
     bytes32 private constant _FREE_REVEAL_TYPEHASH =
-        0x131842ed0075e1b61a69a5a4ee3616ded1e423caf2e195e874bafa82bff79a2e;
+        0xcbb6b2caea63e26816b6962db016926cda6cb7d3a5d178e4f6d922786b13519a;
 
-    /// @dev `keccak256("FreeReroll(uint256[] tokenIds,uint256 deadline)")`.
+    /// @dev `keccak256("FreeReroll(uint256[] tokenIds,bytes32 salt,uint256 deadline)")`.
     bytes32 private constant _FREE_REROLL_TYPEHASH =
-        0x1666099804f525033095653463cd5e7eeff3d90126c9548616b633d1f3e874d0;
+        0xab9e08c6dc1641c44003b1a2c1c5dea3cc27a6ce103778226c15c053a8ca9dae;
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
     /*                          STORAGE                           */
@@ -83,7 +83,7 @@ contract Sheepy404 is DN404, SheepyBase, EIP712 {
     uint256 public rerollPrice;
 
     /// @dev Whether a certain `salt` has been used.
-    mapping(bytes32 => bool) public usedSignatures;
+    mapping(address account => mapping(bytes32 salt => bool used)) public usedSalt;
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
     /*                        INITIALIZER                         */
@@ -146,50 +146,24 @@ contract Sheepy404 is DN404, SheepyBase, EIP712 {
         _reroll(tokenIds);
     }
 
-    function freeReveal(uint256[] memory tokenIds, uint256 deadline, bytes memory signature)
-        public
-    {
-        // Check if signer has admin role
-        bytes32 hash =
-            _hashTypedData(keccak256(abi.encode(_FREE_REVEAL_TYPEHASH, tokenIds, deadline)));
-        bytes32 r;
-        bytes32 s;
-        uint8 v;
-        assembly {
-            r := mload(add(signature, 0x20))
-            s := mload(add(signature, 0x40))
-            v := byte(0, mload(add(signature, 0x60)))
-        }
-        address signer = ecrecover(hash, v, r, s);
-        if (!hasRole(signer, ADMIN_ROLE)) revert Unauthorized();
-        if (block.timestamp > deadline) revert SignatureExpired();
-        bytes32 sigHash = ECDSA.canonicalHash(signature);
-        if (usedSignatures[sigHash]) revert SignatureAlreadyUsed();
-        usedSignatures[sigHash] = true;
+    function freeReveal(
+        uint256[] memory tokenIds,
+        bytes32 salt,
+        uint256 deadline,
+        bytes memory signature
+    ) public {
+        _verifyFreeActionSignature(_FREE_REVEAL_TYPEHASH, tokenIds, salt, deadline, signature);
         _reveal(tokenIds);
     }
 
     /// require a signature from the owner to reroll
-    function freeReroll(uint256[] memory tokenIds, uint256 deadline, bytes memory signature)
-        public
-    {
-        // Check if signer has admin role
-        bytes32 hash =
-            _hashTypedData(keccak256(abi.encode(_FREE_REROLL_TYPEHASH, tokenIds, deadline)));
-        bytes32 r;
-        bytes32 s;
-        uint8 v;
-        assembly {
-            r := mload(add(signature, 0x20))
-            s := mload(add(signature, 0x40))
-            v := byte(0, mload(add(signature, 0x60)))
-        }
-        address signer = ecrecover(hash, v, r, s);
-        if (!hasRole(signer, ADMIN_ROLE)) revert Unauthorized();
-        if (block.timestamp > deadline) revert SignatureExpired();
-        bytes32 sigHash = ECDSA.canonicalHash(signature);
-        if (usedSignatures[sigHash]) revert SignatureAlreadyUsed();
-        usedSignatures[sigHash] = true;
+    function freeReroll(
+        uint256[] memory tokenIds,
+        bytes32 salt,
+        uint256 deadline,
+        bytes memory signature
+    ) public {
+        _verifyFreeActionSignature(_FREE_REROLL_TYPEHASH, tokenIds, salt, deadline, signature);
         _reroll(tokenIds);
     }
 
@@ -260,6 +234,30 @@ contract Sheepy404 is DN404, SheepyBase, EIP712 {
         if (_isApprovedForAll(nftOwner, msg.sender)) return true;
         if (_getApproved(id) == msg.sender) return true;
         return false;
+    }
+
+    function _verifyFreeActionSignature(
+        bytes32 typeHash,
+        uint256[] memory tokenIds,
+        bytes32 salt,
+        uint256 deadline,
+        bytes memory signature
+    ) internal {
+        bytes32 hash = _hashTypedData(keccak256(abi.encode(typeHash, tokenIds, salt, deadline)));
+        bytes32 r;
+        bytes32 s;
+        uint8 v;
+        assembly {
+            r := mload(add(signature, 0x20))
+            s := mload(add(signature, 0x40))
+            v := byte(0, mload(add(signature, 0x60)))
+        }
+        address signer = ecrecover(hash, v, r, s);
+        // Check if signer has admin role
+        if (!hasRole(signer, ADMIN_ROLE)) revert Unauthorized();
+        if (block.timestamp > deadline) revert SignatureExpired();
+        if (usedSalt[signer][salt]) revert SaltUsed();
+        usedSalt[signer][salt] = true;
     }
 
     /// @dev Internal function to handle the reveal logic for token IDs.
