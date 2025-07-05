@@ -5,9 +5,10 @@ import {SheepyBase} from "./SheepyBase.sol";
 import {SafeTransferLib} from "solady/utils/SafeTransferLib.sol";
 import {MetadataReaderLib} from "solady/utils/MetadataReaderLib.sol";
 import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
+import {EIP712} from "solady/utils/EIP712.sol";
 import {ECDSA} from "solady/utils/ECDSA.sol";
 
-contract SheepySale is SheepyBase {
+contract SheepySale is SheepyBase, EIP712 {
     using ECDSA for bytes32;
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
@@ -34,6 +35,9 @@ contract SheepySale is SheepyBase {
 
     /// @dev Invalid signature provided.
     error InvalidSignature();
+
+    /// @dev Expired transaction.
+    error Expired();
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
     /*                          STRUCTS                           */
@@ -70,6 +74,14 @@ contract SheepySale is SheepyBase {
     event Bought(address by, address to, address erc20ToSell, uint96 price, uint96 amount);
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
+    /*                         CONSTANTS                          */
+    /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
+
+    /// @dev `keccak256("Buy(uint256 saleId,address to,uint96 amount,uint96 customAddressQuota,uint256 deadline)")`.
+    bytes32 private constant _BUY_TYPEHASH =
+        0xec7c7d9c9e11ec67a5ee418e18950f875b621b8d2f017fddc9b9e67a3e179938;
+
+    /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
     /*                          STORAGE                           */
     /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
 
@@ -100,8 +112,10 @@ contract SheepySale is SheepyBase {
         address to,
         uint96 amount,
         uint96 customAddressQuota,
+        uint256 deadline,
         bytes calldata signature
     ) public payable {
+        if (block.timestamp > deadline) revert Expired();
         if (amount == 0) revert AmountZero();
         Sale storage s = _sales[saleId];
         if (s.erc20ToSell == address(0)) revert ERC20NotSet();
@@ -114,10 +128,13 @@ contract SheepySale is SheepyBase {
         if (msg.value != priceOf(s.erc20ToSell, amount, s.price)) revert WrongPayment();
 
         if (s.signer != address(0)) {
-            bytes32 hash = keccak256("SheepySale");
-            hash = keccak256(abi.encode(hash, saleId, msg.sender, customAddressQuota));
-            hash = hash.toEthSignedMessageHash();
-            if (hash.recover(signature) != s.signer) revert InvalidSignature();
+            bytes32 hash = _hashTypedData(
+                keccak256(
+                    abi.encode(_BUY_TYPEHASH, saleId, to, amount, customAddressQuota, deadline)
+                )
+            );
+            address signer = hash.recover(signature);
+            if (signer != s.signer) revert InvalidSignature();
         }
         SafeTransferLib.safeTransfer(s.erc20ToSell, to, amount);
         emit Bought(msg.sender, to, s.erc20ToSell, s.price, amount);
@@ -141,6 +158,11 @@ contract SheepySale is SheepyBase {
     /// @dev Returns the total amount bought by `by` in `saleId`.
     function bought(uint256 saleId, address by) public view returns (uint256) {
         return _bought[saleId][by];
+    }
+
+    /// @dev Returns the domain separator for EIP-712 typed data signing.
+    function DOMAIN_SEPARATOR() external view returns (bytes32 result) {
+        return _domainSeparator();
     }
 
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
@@ -168,5 +190,19 @@ contract SheepySale is SheepyBase {
             totalBought: 0,
             signer: signer
         });
+    }
+
+    /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
+    /*                         OVERRIDES                          */
+    /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
+
+    /// @dev Returns the name and version of the contract. Override from EIP712.
+    function _domainNameAndVersion()
+        internal
+        pure
+        override
+        returns (string memory, string memory)
+    {
+        return ("SheepySale", "1");
     }
 }
