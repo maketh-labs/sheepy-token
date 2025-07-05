@@ -12,6 +12,7 @@ import {LibAGW} from "absmate/utils/LibAGW.sol";
 
 /// @dev This contract can be used by itself or as a proxy's implementation.
 contract Sheepy404 is DN404, SheepyBase, EIP712 {
+    using ECDSA for bytes32;
     using LibBitmap for LibBitmap.Bitmap;
     using DynamicArrayLib for uint256[];
     using DynamicArrayLib for address[];
@@ -94,8 +95,8 @@ contract Sheepy404 is DN404, SheepyBase, EIP712 {
         address initialOwner,
         address initialAdmin,
         address mirror,
-        string memory notSoSecret
-    ) public virtual {
+        string calldata notSoSecret
+    ) external virtual {
         uint256 initialSupply = 10_000_000_000 * 10 ** 18;
         _initializeSheepyBase(initialOwner, initialAdmin, notSoSecret);
         _initializeDN404(initialSupply, initialOwner, mirror);
@@ -124,33 +125,28 @@ contract Sheepy404 is DN404, SheepyBase, EIP712 {
         }
     }
 
-    /// @dev Returns the domain separator for EIP-712 typed data signing.
-    function DOMAIN_SEPARATOR() external view returns (bytes32 result) {
-        return _domainSeparator();
-    }
-
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
     /*                       REVEAL & REROLL                      */
     /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
 
     /// @dev Allows the owner of the NFTs to pay to reveal the `tokenIds`.
     /// A NFT can be re-revealed even if it has been revealed.
-    function reveal(uint256[] memory tokenIds) public payable virtual {
+    function reveal(uint256[] calldata tokenIds) public payable virtual {
         if (msg.value != revealPrice * tokenIds.length) revert WrongPayment();
         _reveal(tokenIds);
     }
 
     /// @dev Allows the owner of the NFTs to pay to reroll the `tokenIds`.
-    function reroll(uint256[] memory tokenIds) public payable {
+    function reroll(uint256[] calldata tokenIds) public payable {
         if (msg.value != rerollPrice * tokenIds.length) revert WrongPayment();
         _reroll(tokenIds);
     }
 
     function freeReveal(
-        uint256[] memory tokenIds,
+        uint256[] calldata tokenIds,
         bytes32 salt,
         uint256 deadline,
-        bytes memory signature
+        bytes calldata signature
     ) public {
         _verifyFreeActionSignature(_FREE_REVEAL_TYPEHASH, tokenIds, salt, deadline, signature);
         _reveal(tokenIds);
@@ -158,17 +154,17 @@ contract Sheepy404 is DN404, SheepyBase, EIP712 {
 
     /// require a signature from the owner to reroll
     function freeReroll(
-        uint256[] memory tokenIds,
+        uint256[] calldata tokenIds,
         bytes32 salt,
         uint256 deadline,
-        bytes memory signature
+        bytes calldata signature
     ) public {
         _verifyFreeActionSignature(_FREE_REROLL_TYPEHASH, tokenIds, salt, deadline, signature);
         _reroll(tokenIds);
     }
 
     /// @dev Returns if each of the `tokenIds` has been revealed.
-    function revealed(uint256[] memory tokenIds) public view returns (bool[] memory) {
+    function revealed(uint256[] calldata tokenIds) public view returns (bool[] memory) {
         uint256[] memory results = DynamicArrayLib.malloc(tokenIds.length);
         for (uint256 i; i < tokenIds.length; ++i) {
             results.set(i, _revealed.get(tokenIds.get(i)));
@@ -185,12 +181,17 @@ contract Sheepy404 is DN404, SheepyBase, EIP712 {
         return _ownedIds(owner, 0, type(uint256).max);
     }
 
+    /// @dev Returns the domain separator for EIP-712 typed data signing.
+    function DOMAIN_SEPARATOR() external view returns (bytes32 result) {
+        return _domainSeparator();
+    }
+
     /*«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-«-*/
     /*                      ADMIN FUNCTIONS                       */
     /*-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»-»*/
 
     /// @dev Sets the name and symbol.
-    function setNameAndSymbol(string memory newName, string memory newSymbol)
+    function setNameAndSymbol(string calldata newName, string calldata newSymbol)
         public
         virtual
         onlyOwnerOrRole(ADMIN_ROLE)
@@ -200,7 +201,7 @@ contract Sheepy404 is DN404, SheepyBase, EIP712 {
     }
 
     /// @dev Sets the base URI.
-    function setBaseURI(string memory newBaseURI) public virtual onlyOwnerOrRole(ADMIN_ROLE) {
+    function setBaseURI(string calldata newBaseURI) public virtual onlyOwnerOrRole(ADMIN_ROLE) {
         _baseURI = newBaseURI;
         _logBatchMetadataUpdate(1, totalSupply() / _unit());
     }
@@ -238,21 +239,13 @@ contract Sheepy404 is DN404, SheepyBase, EIP712 {
 
     function _verifyFreeActionSignature(
         bytes32 typeHash,
-        uint256[] memory tokenIds,
+        uint256[] calldata tokenIds,
         bytes32 salt,
         uint256 deadline,
-        bytes memory signature
+        bytes calldata signature
     ) internal {
         bytes32 hash = _hashTypedData(keccak256(abi.encode(typeHash, tokenIds, salt, deadline)));
-        bytes32 r;
-        bytes32 s;
-        uint8 v;
-        assembly {
-            r := mload(add(signature, 0x20))
-            s := mload(add(signature, 0x40))
-            v := byte(0, mload(add(signature, 0x60)))
-        }
-        address signer = ecrecover(hash, v, r, s);
+        address signer = hash.recover(signature);
         // Check if signer has admin role
         if (!hasRole(signer, ADMIN_ROLE)) revert Unauthorized();
         if (block.timestamp > deadline) revert SignatureExpired();
@@ -261,7 +254,7 @@ contract Sheepy404 is DN404, SheepyBase, EIP712 {
     }
 
     /// @dev Internal function to handle the reveal logic for token IDs.
-    function _reveal(uint256[] memory tokenIds) internal {
+    function _reveal(uint256[] calldata tokenIds) internal {
         for (uint256 i; i < tokenIds.length; ++i) {
             uint256 id = tokenIds.get(i);
             if (!_callerIsAuthorizedFor(id)) revert Unauthorized();
@@ -273,7 +266,7 @@ contract Sheepy404 is DN404, SheepyBase, EIP712 {
     }
 
     /// @dev Internal function to handle the reroll logic for token IDs.
-    function _reroll(uint256[] memory tokenIds) internal {
+    function _reroll(uint256[] calldata tokenIds) internal {
         for (uint256 i; i < tokenIds.length; ++i) {
             uint256 id = tokenIds.get(i);
             if (!_callerIsAuthorizedFor(id)) revert Unauthorized();
