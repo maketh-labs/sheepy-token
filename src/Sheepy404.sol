@@ -321,6 +321,7 @@ contract Sheepy404 is DN404, SheepyBase, EIP712 {
             for (uint256 i; i < ids.length; ++i) {
                 if (from.toUint256Array().get(i) != to.toUint256Array().get(i)) {
                     uint256 id = ids.get(i);
+                    if (!_revealed.get(id)) continue;
                     _revealed.unset(id);
                     emit Reset(id);
                     _logMetadataUpdate(id);
