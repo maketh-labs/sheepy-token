@@ -51,6 +51,9 @@ contract Sheepy404Test is Test {
         mirror = new Sheepy404Mirror();
         sale = new SheepySale();
         (_BOB, _BOB_PRIVATE_KEY) = makeAddrAndKey("bob");
+        vm.label(_ALICE, "alice");
+        vm.label(_CHARLIE, "charlie");
+        vm.label(_DAVID, "david");
 
         // Mock LibAGW.isAGW to always return false globally
         vm.mockCall(
@@ -119,15 +122,13 @@ contract Sheepy404Test is Test {
     function testResetRevealAndReroll() public {
         _initialize();
 
-        vm.expectEmit();
-        emit Reset(1);
+        vm.recordLogs();
         vm.prank(_ALICE);
         sheepy.transfer(_BOB, _UNIT * 2);
         assertEq(mirror.balanceOf(_BOB), 2);
         assertEq(mirror.ownerOf(1), _BOB);
         assertEq(mirror.ownerOf(2), _BOB);
 
-        vm.recordLogs();
         vm.prank(_BOB);
         mirror.transferFrom(_BOB, _CHARLIE, 1);
         Vm.Log[] memory entries = vm.getRecordedLogs();
@@ -152,6 +153,8 @@ contract Sheepy404Test is Test {
         assertEq(address(_CHARLIE).balance, 100 ether - _REVEAL_PRICE - _REROLL_PRICE);
 
         vm.prank(_CHARLIE);
+        vm.expectEmit();
+        emit Reset(1);
         sheepy.transfer(_BOB, _UNIT);
         assertEq(mirror.ownerOf(1), _BOB);
     }
@@ -165,8 +168,6 @@ contract Sheepy404Test is Test {
             abi.encode(true)
         );
 
-        vm.expectEmit();
-        emit Reset(1);
         vm.prank(_ALICE);
         sheepy.transfer(address(this), _UNIT); // address(this) has code
         assertEq(mirror.balanceOf(address(this)), 1);
