@@ -45,6 +45,8 @@ contract Sheepy404Test is Test {
         0xcbb6b2caea63e26816b6962db016926cda6cb7d3a5d178e4f6d922786b13519a;
     bytes32 private constant _FREE_REROLL_TYPEHASH =
         0xab9e08c6dc1641c44003b1a2c1c5dea3cc27a6ce103778226c15c053a8ca9dae;
+    bytes32 private constant _BUY_TYPEHASH =
+        0xec7c7d9c9e11ec67a5ee418e18950f875b621b8d2f017fddc9b9e67a3e179938;
 
     function setUp() public {
         sheepy = new Sheepy404();
@@ -80,6 +82,22 @@ contract Sheepy404Test is Test {
         sheepy.setRerollPrice(_REROLL_PRICE);
 
         sale.initialize(_ALICE, address(0), _NOT_SO_SECRET);
+    }
+
+    function _createBuySignature(
+        uint256 saleId,
+        address to,
+        uint96 amount,
+        uint96 customAddressQuota,
+        uint256 deadline,
+        uint256 signerPrivateKey
+    ) internal view returns (bytes memory) {
+        bytes32 structHash =
+            keccak256(abi.encode(_BUY_TYPEHASH, saleId, to, amount, customAddressQuota, deadline));
+        bytes32 domainSeparator = sale.DOMAIN_SEPARATOR();
+        bytes32 digest = keccak256(abi.encodePacked("\x19\x01", domainSeparator, structHash));
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(signerPrivateKey, digest);
+        return abi.encodePacked(r, s, v);
     }
 
     function testInitialize() public {
@@ -501,29 +519,27 @@ contract Sheepy404Test is Test {
         // Create signature for CHARLIE to claim 50 tokens
         uint96 claimAmount = uint96(50 * _WAD);
         uint96 customQuota = uint96(100 * _WAD);
-        bytes32 hash = keccak256("SheepySale");
-        hash = keccak256(abi.encode(hash, uint256(1), _CHARLIE, customQuota));
-        hash = hash.toEthSignedMessageHash();
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(_BOB_PRIVATE_KEY, hash);
-        bytes memory signature = abi.encodePacked(r, s, v);
+        uint256 deadline = block.timestamp + 1 hours;
+        bytes memory signature =
+            _createBuySignature(1, _CHARLIE, claimAmount, customQuota, deadline, _BOB_PRIVATE_KEY);
 
         // Test successful claim
         uint256 charlieBalanceBefore = sheepy.balanceOf(_CHARLIE);
         vm.prank(_CHARLIE);
-        sale.buy(1, _CHARLIE, claimAmount, customQuota, signature);
+        sale.buy(1, _CHARLIE, claimAmount, customQuota, deadline, signature);
         assertEq(sheepy.balanceOf(_CHARLIE), charlieBalanceBefore + claimAmount);
         assertEq(sale.bought(1, _CHARLIE), claimAmount);
 
         // Test multiple claims with same signature (should work until quota hit)
         vm.prank(_CHARLIE);
-        sale.buy(1, _CHARLIE, claimAmount, customQuota, signature);
+        sale.buy(1, _CHARLIE, claimAmount, customQuota, deadline, signature);
         assertEq(sheepy.balanceOf(_CHARLIE), charlieBalanceBefore + claimAmount * 2);
         assertEq(sale.bought(1, _CHARLIE), claimAmount * 2);
 
         // Test quota exceeded
         vm.prank(_CHARLIE);
         vm.expectRevert(SheepySale.ExceededAddressQuota.selector);
-        sale.buy(1, _CHARLIE, claimAmount, customQuota, signature);
+        sale.buy(1, _CHARLIE, claimAmount, customQuota, deadline, signature);
     }
 
     function testAirdropClaimWithInvalidSignature() public {
@@ -547,28 +563,23 @@ contract Sheepy404Test is Test {
 
         uint96 claimAmount = uint96(50 * _WAD);
         uint96 customQuota = uint96(100 * _WAD);
+        uint256 deadline = block.timestamp + 1 hours;
 
         // Test with wrong signer (CHARLIE instead of BOB)
-        bytes32 hash = keccak256("SheepySale");
-        hash = keccak256(abi.encode(hash, uint256(1), _CHARLIE, customQuota));
-        hash = hash.toEthSignedMessageHash();
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(0x333, hash);
-        bytes memory wrongSignature = abi.encodePacked(r, s, v);
+        bytes memory wrongSignature =
+            _createBuySignature(1, _CHARLIE, claimAmount, customQuota, deadline, 0x333);
 
         vm.prank(_CHARLIE);
         vm.expectRevert(SheepySale.InvalidSignature.selector);
-        sale.buy(1, _CHARLIE, claimAmount, customQuota, wrongSignature);
+        sale.buy(1, _CHARLIE, claimAmount, customQuota, deadline, wrongSignature);
 
         // Test signature for different user
-        hash = keccak256("SheepySale");
-        hash = keccak256(abi.encode(hash, uint256(1), _DAVID, customQuota));
-        hash = hash.toEthSignedMessageHash();
-        (v, r, s) = vm.sign(_BOB_PRIVATE_KEY, hash);
-        bytes memory davidSignature = abi.encodePacked(r, s, v);
+        bytes memory davidSignature =
+            _createBuySignature(1, _DAVID, claimAmount, customQuota, deadline, _BOB_PRIVATE_KEY);
 
         vm.prank(_CHARLIE); // CHARLIE tries to use DAVID's signature
         vm.expectRevert(SheepySale.InvalidSignature.selector);
-        sale.buy(1, _CHARLIE, claimAmount, customQuota, davidSignature);
+        sale.buy(1, _CHARLIE, claimAmount, customQuota, deadline, davidSignature);
     }
 
     function testAirdropClaimQuotaLimits() public {
@@ -592,27 +603,22 @@ contract Sheepy404Test is Test {
 
         uint96 claimAmount = uint96(100 * _WAD);
         uint96 customQuota = uint96(200 * _WAD);
+        uint256 deadline = block.timestamp + 1 hours;
 
         // CHARLIE claims first
-        bytes32 hash = keccak256("SheepySale");
-        hash = keccak256(abi.encode(hash, uint256(1), _CHARLIE, customQuota));
-        hash = hash.toEthSignedMessageHash();
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(_BOB_PRIVATE_KEY, hash);
-        bytes memory charlieSignature = abi.encodePacked(r, s, v);
+        bytes memory charlieSignature =
+            _createBuySignature(1, _CHARLIE, claimAmount, customQuota, deadline, _BOB_PRIVATE_KEY);
 
         vm.prank(_CHARLIE);
-        sale.buy(1, _CHARLIE, claimAmount, customQuota, charlieSignature);
+        sale.buy(1, _CHARLIE, claimAmount, customQuota, deadline, charlieSignature);
 
         // DAVID tries to claim but exceeds total quota
-        hash = keccak256("SheepySale");
-        hash = keccak256(abi.encode(hash, uint256(1), _DAVID, customQuota));
-        hash = hash.toEthSignedMessageHash();
-        (v, r, s) = vm.sign(_BOB_PRIVATE_KEY, hash);
-        bytes memory davidSignature = abi.encodePacked(r, s, v);
+        bytes memory davidSignature =
+            _createBuySignature(1, _DAVID, claimAmount, customQuota, deadline, _BOB_PRIVATE_KEY);
 
         vm.prank(_DAVID);
         vm.expectRevert(SheepySale.ExceededTotalQuota.selector);
-        sale.buy(1, _DAVID, claimAmount, customQuota, davidSignature);
+        sale.buy(1, _DAVID, claimAmount, customQuota, deadline, davidSignature);
     }
 
     function testAirdropClaimTimeBounds() public {
@@ -636,28 +642,35 @@ contract Sheepy404Test is Test {
 
         uint96 claimAmount = uint96(50 * _WAD);
         uint96 customQuota = uint96(100 * _WAD);
-        bytes32 hash = keccak256("SheepySale");
-        hash = keccak256(abi.encode(hash, uint256(1), _CHARLIE, customQuota));
-        hash = hash.toEthSignedMessageHash();
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(_BOB_PRIVATE_KEY, hash);
-        bytes memory signature = abi.encodePacked(r, s, v);
+        uint256 deadline = block.timestamp + 1 hours;
+        bytes memory signature =
+            _createBuySignature(1, _CHARLIE, claimAmount, customQuota, deadline, _BOB_PRIVATE_KEY);
 
         // Test claim before start time
         vm.prank(_CHARLIE);
         vm.expectRevert(SheepySale.SaleNotOpen.selector);
-        sale.buy(1, _CHARLIE, claimAmount, customQuota, signature);
+        sale.buy(1, _CHARLIE, claimAmount, customQuota, deadline, signature);
 
         // Test claim during valid time
         vm.warp(block.timestamp + 150);
+        // Need to create new signature with updated deadline since time moved forward
+        deadline = block.timestamp + 1 hours;
+        signature =
+            _createBuySignature(1, _CHARLIE, claimAmount, customQuota, deadline, _BOB_PRIVATE_KEY);
+
         vm.prank(_CHARLIE);
-        sale.buy(1, _CHARLIE, claimAmount, customQuota, signature);
+        sale.buy(1, _CHARLIE, claimAmount, customQuota, deadline, signature);
         assertEq(sheepy.balanceOf(_CHARLIE), claimAmount);
 
         // Test claim after end time
         vm.warp(block.timestamp + 100);
+        deadline = block.timestamp + 1 hours;
+        signature =
+            _createBuySignature(1, _CHARLIE, claimAmount, customQuota, deadline, _BOB_PRIVATE_KEY);
+
         vm.prank(_CHARLIE);
         vm.expectRevert(SheepySale.SaleNotOpen.selector);
-        sale.buy(1, _CHARLIE, claimAmount, customQuota, signature);
+        sale.buy(1, _CHARLIE, claimAmount, customQuota, deadline, signature);
     }
 
     function testSignatureReplayProtection() public {
@@ -828,42 +841,123 @@ contract Sheepy404Test is Test {
         vm.prank(_ALICE);
         sheepy.transfer(address(sale), 1000 * _WAD);
 
+        uint256 deadline = block.timestamp + 1 hours;
+
         // CHARLIE gets custom quota of 100 (higher than default)
         // But effective quota is min(100, 50) = 50
         uint96 charlieCustomQuota = uint96(100 * _WAD);
-        bytes32 hash = keccak256("SheepySale");
-        hash = keccak256(abi.encode(hash, uint256(1), _CHARLIE, charlieCustomQuota));
-        hash = hash.toEthSignedMessageHash();
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(_BOB_PRIVATE_KEY, hash);
-        bytes memory charlieSignature = abi.encodePacked(r, s, v);
+        bytes memory charlieSignature = _createBuySignature(
+            1, _CHARLIE, uint96(45 * _WAD), charlieCustomQuota, deadline, _BOB_PRIVATE_KEY
+        );
 
         // Should succeed because claim amount (45) is within effective quota of min(100, 50) = 50
         vm.prank(_CHARLIE);
-        sale.buy(1, _CHARLIE, uint96(45 * _WAD), charlieCustomQuota, charlieSignature);
+        sale.buy(1, _CHARLIE, uint96(45 * _WAD), charlieCustomQuota, deadline, charlieSignature);
         assertEq(sheepy.balanceOf(_CHARLIE), 45 * _WAD);
 
         // CHARLIE tries to claim 10 more (total would be 55), should fail because effective quota is 50
+        bytes memory charlieSignature2 = _createBuySignature(
+            1, _CHARLIE, uint96(10 * _WAD), charlieCustomQuota, deadline, _BOB_PRIVATE_KEY
+        );
         vm.prank(_CHARLIE);
         vm.expectRevert(SheepySale.ExceededAddressQuota.selector);
-        sale.buy(1, _CHARLIE, uint96(10 * _WAD), charlieCustomQuota, charlieSignature);
+        sale.buy(1, _CHARLIE, uint96(10 * _WAD), charlieCustomQuota, deadline, charlieSignature2);
 
         // DAVID gets custom quota of 30 (lower than default)
         // Effective quota is min(30, 50) = 30
         uint96 davidCustomQuota = uint96(30 * _WAD);
-        hash = keccak256("SheepySale");
-        hash = keccak256(abi.encode(hash, uint256(1), _DAVID, davidCustomQuota));
-        hash = hash.toEthSignedMessageHash();
-        (v, r, s) = vm.sign(_BOB_PRIVATE_KEY, hash);
-        bytes memory davidSignature = abi.encodePacked(r, s, v);
+        bytes memory davidSignature = _createBuySignature(
+            1, _DAVID, uint96(25 * _WAD), davidCustomQuota, deadline, _BOB_PRIVATE_KEY
+        );
 
         // Should succeed when claiming within custom quota (30)
         vm.prank(_DAVID);
-        sale.buy(1, _DAVID, uint96(25 * _WAD), davidCustomQuota, davidSignature);
+        sale.buy(1, _DAVID, uint96(25 * _WAD), davidCustomQuota, deadline, davidSignature);
         assertEq(sheepy.balanceOf(_DAVID), 25 * _WAD);
 
         // DAVID tries to claim 10 more (total would be 35), should fail because custom quota is 30
+        bytes memory davidSignature2 = _createBuySignature(
+            1, _DAVID, uint96(10 * _WAD), davidCustomQuota, deadline, _BOB_PRIVATE_KEY
+        );
         vm.prank(_DAVID);
         vm.expectRevert(SheepySale.ExceededAddressQuota.selector);
-        sale.buy(1, _DAVID, uint96(10 * _WAD), davidCustomQuota, davidSignature);
+        sale.buy(1, _DAVID, uint96(10 * _WAD), davidCustomQuota, deadline, davidSignature2);
+    }
+
+    function testBuyDeadlineExpiration() public {
+        _initialize();
+
+        // Setup airdrop sale
+        vm.prank(_ALICE);
+        sale.setSale(
+            1,
+            address(sheepy),
+            1,
+            uint40(block.timestamp + 1000),
+            0,
+            uint96(1000 * _WAD),
+            uint96(100 * _WAD),
+            _BOB
+        );
+
+        vm.prank(_ALICE);
+        sheepy.transfer(address(sale), 1000 * _WAD);
+
+        uint96 claimAmount = uint96(50 * _WAD);
+        uint96 customQuota = uint96(100 * _WAD);
+
+        // Test with future deadline (should work)
+        uint256 futureDeadline = block.timestamp + 1 hours;
+        bytes memory signature = _createBuySignature(
+            1, _CHARLIE, claimAmount, customQuota, futureDeadline, _BOB_PRIVATE_KEY
+        );
+
+        vm.prank(_CHARLIE);
+        sale.buy(1, _CHARLIE, claimAmount, customQuota, futureDeadline, signature);
+        assertEq(sheepy.balanceOf(_CHARLIE), claimAmount);
+
+        // Test with expired deadline (should fail)
+        vm.warp(block.timestamp + 2 hours);
+        uint256 expiredDeadline = block.timestamp - 1 hours;
+        bytes memory expiredSignature = _createBuySignature(
+            1, _DAVID, claimAmount, customQuota, expiredDeadline, _BOB_PRIVATE_KEY
+        );
+
+        vm.prank(_DAVID);
+        vm.expectRevert(SheepySale.Expired.selector);
+        sale.buy(1, _DAVID, claimAmount, customQuota, expiredDeadline, expiredSignature);
+    }
+
+    function testBuyWithoutSigner() public {
+        _initialize();
+
+        // Setup sale without signer requirement
+        vm.prank(_ALICE);
+        sale.setSale(
+            1,
+            address(sheepy),
+            1,
+            uint40(block.timestamp + 1000),
+            uint96(0.01 ether), // 0.01 ETH per WAD
+            uint96(1000 * _WAD),
+            uint96(100 * _WAD),
+            address(0) // No signer required
+        );
+
+        vm.prank(_ALICE);
+        sheepy.transfer(address(sale), 1000 * _WAD);
+
+        uint96 claimAmount = uint96(50 * _WAD);
+        uint96 customQuota = uint96(100 * _WAD);
+        uint256 deadline = block.timestamp + 1 hours;
+
+        // Calculate required payment
+        uint256 requiredPayment = sale.priceOf(address(sheepy), claimAmount, uint96(0.01 ether));
+
+        vm.deal(_CHARLIE, requiredPayment);
+        vm.prank(_CHARLIE);
+        sale.buy{value: requiredPayment}(1, _CHARLIE, claimAmount, customQuota, deadline, "");
+
+        assertEq(sheepy.balanceOf(_CHARLIE), claimAmount);
     }
 }
